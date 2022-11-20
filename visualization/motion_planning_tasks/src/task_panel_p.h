@@ -42,6 +42,7 @@
 #include "ui_task_panel.h"
 #include "ui_task_view.h"
 #include "ui_global_settings.h"
+#include "add_task_stage.h"
 #include <moveit_task_constructor_msgs/ExecuteTaskSolutionAction.h>
 #include <actionlib/client/simple_action_client.h>
 
@@ -102,3 +103,4 @@ public:
 	rviz::PropertyTreeModel* properties;
 };
 }  // namespace moveit_rviz_plugin
+

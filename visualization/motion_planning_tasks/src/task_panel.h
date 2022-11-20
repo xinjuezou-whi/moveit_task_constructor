@@ -41,6 +41,10 @@
 #include <rviz/panel.h>
 #include <moveit/macros/class_forward.h>
 #include <QModelIndex>
+#include <geometry_msgs/PoseStamped.h>
+#include <geometry_msgs/Vector3Stamped.h>
+#include <geometry_msgs/TwistStamped.h>
+
 class QItemSelection;
 class QIcon;
 
@@ -50,6 +54,12 @@ class Property;
 class BoolProperty;
 class EnumProperty;
 }  // namespace rviz
+
+namespace moveit::task_constructor
+{
+class Task;
+class Stage;
+}
 
 namespace moveit_rviz_plugin {
 
@@ -116,6 +126,8 @@ class TaskView : public SubPanel
 	Q_DECLARE_PRIVATE(TaskView)
 	TaskViewPrivate* d_ptr;
 
+	std::vector<std::shared_ptr<moveit::task_constructor::Task>> tasks_;
+
 protected:
 	// configuration settings
 	enum TaskExpand
@@ -148,12 +160,25 @@ public Q_SLOTS:
 
 protected Q_SLOTS:
 	void removeSelectedStages();
+	void removeStages();
 	void onCurrentStageChanged(const QModelIndex& current, const QModelIndex& previous);
 	void onCurrentSolutionChanged(const QModelIndex& current, const QModelIndex& previous);
 	void onSolutionSelectionChanged(const QItemSelection& selected, const QItemSelection& deselected);
 	void onExecCurrentSolution() const;
 	void onShowTimeChanged();
 	void onOldTaskHandlingChanged();
+
+protected:
+	bool loadTasks(std::string File);
+	void saveTasks(std::string File);
+	bool getGoal(const moveit::task_constructor::Stage* Stage, std::string& Goal);
+	bool getGoal(const moveit::task_constructor::Stage* Stage, geometry_msgs::PoseStamped& Goal);
+	bool getOffset(const moveit::task_constructor::Stage* Stage, geometry_msgs::Vector3Stamped& Offset);
+	bool getOffset(const moveit::task_constructor::Stage* Stage, geometry_msgs::TwistStamped& Offset);
+	bool getOffset(const moveit::task_constructor::Stage* Stage, std::map<std::string, double>& Offset);
+	std::string serializeTask(std::shared_ptr<moveit::task_constructor::Task> Task);
+	void execute();
+	void threadExecute();
 
 private:
 	Q_PRIVATE_SLOT(d_ptr, void configureInsertedModels(QModelIndex, int, int));
@@ -177,3 +202,4 @@ public:
 	void load(const rviz::Config& config) override;
 };
 }  // namespace moveit_rviz_plugin
+

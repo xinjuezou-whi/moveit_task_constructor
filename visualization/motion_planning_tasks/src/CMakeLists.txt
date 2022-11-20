@@ -19,6 +19,7 @@ add_library(${MOVEIT_LIB_NAME}
 	task_list_model.cpp
 	task_panel.cpp
 	task_panel_p.h
+    add_task_stage.cpp
 
 	${UIC_FILES}
 

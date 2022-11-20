@@ -68,7 +68,7 @@ class IntrospectionPrivate
 {
 public:
 	IntrospectionPrivate(const TaskPrivate* task, Introspection* self)
-	  : nh_(std::string("~/") + task->ns())  // topics + services are advertised in private namespace
+	  : nh_(task->ns() == "whi_gui" ? task->ns() : std::string("~/") + task->ns())  // topics + services are advertised in private namespace
 	  , task_(task)
 	  , task_id_(getTaskId(task)) {
 		task_description_publisher_ =

@@ -222,7 +222,19 @@ void SubTrajectory::fillMessage(moveit_task_constructor_msgs::Solution& msg, Int
 	SolutionBase::fillInfo(t.info, introspection);
 
 	if (trajectory())
+	{
+#ifdef VIEW_DURATION
+		std::cout << "waypoints count " << trajectory()->getWayPointCount() << std::endl;
+		std::cout << "duration:" << std::endl;
+		for (const auto& it : trajectory()->getWayPointDurations())
+		{
+			std::cout << it << ",";
+		}
+		std::cout << std::endl;
+#endif
 		trajectory()->getRobotTrajectoryMsg(t.trajectory);
+	}
+		
 
 	this->end()->scene()->getPlanningSceneDiffMsg(t.scene_diff);
 }

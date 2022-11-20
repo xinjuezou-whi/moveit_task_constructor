@@ -93,6 +93,8 @@ public:
 	/// move specified joint variables by given amount
 	void setDirection(const std::map<std::string, double>& joint_deltas) { setProperty("direction", joint_deltas); }
 
+	const solvers::PlannerInterfacePtr planner() const { return planner_; };
+
 protected:
 	// return false if trajectory shouldn't be stored
 	bool compute(const InterfaceState& state, planning_scene::PlanningScenePtr& scene, SubTrajectory& trajectory,

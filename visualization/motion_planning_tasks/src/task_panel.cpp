@@ -58,6 +58,24 @@
 #include <ros/console.h>
 #include <QPointer>
 #include <QButtonGroup>
+#include <QFileDialog>
+
+#include <moveit/task_constructor/solvers/cartesian_path.h>
+#include <moveit/task_constructor/stages/fixed_state.h>
+#include <moveit/task_constructor/stages/current_state.h>
+#include <moveit/task_constructor/stages/move_to.h>
+#include <moveit/task_constructor/stages/move_relative.h>
+#include <moveit_task_constructor_msgs/Solution.h>
+#include <moveit/task_constructor/solvers/cartesian_path.h>
+#include <moveit/task_constructor/solvers/joint_interpolation.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <tf2_eigen/tf2_eigen.h>
+#include <tf/LinearMath/Matrix3x3.h>
+#include <angles/angles.h>
+#include <yaml-cpp/yaml.h>
+#include <algorithm>
+#include <fstream>
+#include <thread>
 
 namespace moveit_rviz_plugin {
 
@@ -237,7 +255,7 @@ TaskViewPrivate::TaskViewPrivate(TaskView* view) : q_ptr(view), exec_action_clie
 
 	// init actions
 	// TODO(v4hn): add actionAddLocalTask once there is something meaningful to add
-	tasks_view->addActions({ /*actionAddLocalTask,*/ actionRemoveTaskTreeRows, actionShowTimeColumn });
+	tasks_view->addActions({ actionAddLocalTask, actionRemoveTaskTreeRows, actionShowTimeColumn });
 }
 
 std::pair<TaskListModel*, TaskDisplay*> TaskViewPrivate::getTaskListModel(const QModelIndex& index) const {
@@ -296,11 +314,13 @@ TaskView::TaskView(moveit_rviz_plugin::TaskPanel* parent, rviz::Property* root)
   : SubPanel(parent), d_ptr(new TaskViewPrivate(this)) {
 	Q_D(TaskView);
 
-	d_ptr->tasks_property_splitter->setStretchFactor(0, 3);
-	d_ptr->tasks_property_splitter->setStretchFactor(1, 1);
+	d_ptr->tasks_property_splitter->setStretchFactor(0, 1);
+	d_ptr->tasks_property_splitter->setStretchFactor(1, 3);
+	d_ptr->tasks_property_splitter->setStretchFactor(2, 1);
+	d_ptr->tasks_property_splitter->setStretchFactor(3, 1);
 
 	// connect signals
-	connect(d->actionRemoveTaskTreeRows, SIGNAL(triggered()), this, SLOT(removeSelectedStages()));
+	connect(d->actionRemoveTaskTreeRows, SIGNAL(triggered()), this, SLOT(removeStages()));
 	connect(d->actionAddLocalTask, SIGNAL(triggered()), this, SLOT(addTask()));
 	connect(d->actionShowTimeColumn, &QAction::triggered, [this](bool checked) { show_time_column->setValue(checked); });
 
@@ -337,6 +357,42 @@ TaskView::TaskView(moveit_rviz_plugin::TaskPanel* parent, rviz::Property* root)
 	connect(show_time_column, &rviz::Property::changed, this, &TaskView::onShowTimeChanged);
 
 	d_ptr->configureExistingModels();
+
+	// WHI version
+	std::cout << "\nWHI MoveIt Task Constructor GUI demo VERSION 00.05" << std::endl;
+	std::cout << "Copyright © 2022-2023 Wheel Hub Intelligent Co.,Ltd. All rights reserved\n" << std::endl;
+	// WHI logo
+	boost::filesystem::path path(ros::package::getPath("moveit_task_constructor_visualization"));
+	QImage logo;
+	if (logo.load(QString(path.string().c_str()) + "/icons/classes/whi_logo.png"))
+	{
+		QImage scaled = logo.scaledToHeight(48);
+		d_ptr->label_logo->setPixmap(QPixmap::fromImage(scaled));
+	}
+	// widget properties
+	d_ptr->doubleSpinBox_span->setRange(0.0, 3600.0); // 1 hour
+	d_ptr->doubleSpinBox_span->setValue(0.2);
+	d_ptr->doubleSpinBox_span->setSingleStep(0.1);
+	// signals
+	connect(d_ptr->pushButton_load, &QPushButton::clicked, this, [=]()
+	{
+		QString fileName = QFileDialog::getOpenFileName(this, tr("Open Task"), "/home/whi", tr("Task Files (*.yaml)"));
+		loadTasks(fileName.toStdString());
+	});
+	connect(d_ptr->pushButton_save, &QPushButton::clicked, this, [=]()
+	{
+		QString fileName = QFileDialog::getSaveFileName(this, tr("Save Task"), "/home/whi/untitled.yaml", tr("Task Files (*.yaml)"));
+		if (!fileName.contains(".yaml"))
+		{
+			fileName += ".yaml";
+		}
+		saveTasks(fileName.toStdString());
+	});
+	connect(d_ptr->pushButton_execute, &QPushButton::clicked, this, [=]()
+	{
+		d_ptr->pushButton_execute->setEnabled(false);
+		execute();
+	});
 }
 
 TaskView::~TaskView() {
@@ -407,13 +463,46 @@ void TaskView::load(const rviz::Config& config) {
 		view->sortByColumn(column, static_cast<Qt::SortOrder>(order));
 }
 
-void TaskView::addTask() {
+void TaskView::addTask()
+{
 	QModelIndex current = d_ptr->tasks_view->currentIndex();
 	if (!current.isValid())
 		return;
 	bool is_top_level = !current.parent().isValid();
 
 	TaskListModel* task_list_model = d_ptr->getTaskListModel(current).first;
+	TaskDisplay* display = d_ptr->getTaskListModel(current).second;
+
+	// attribute 'WA_DeleteOnClose' restore the resouce to which the dialog points,
+	// but leaves its pointer valid, therefore use QPoint to check if its reference is deleted
+	static QPointer<DlgAddTaskStage> smart;
+	if (smart.isNull())
+	{
+		if (is_top_level)
+		{
+			tasks_.push_back(std::make_shared<moveit::task_constructor::Task>("whi_gui"));
+			smart = new DlgAddTaskStage(tasks_.back(), display, DlgAddTaskStage::TYPE_TASK, this);
+		}
+		else
+		{
+			smart = new DlgAddTaskStage(tasks_[current.row()], display, DlgAddTaskStage::TYPE_STAGE, this);
+		}
+	}
+    smart.data()->setAttribute(Qt::WA_DeleteOnClose);
+    smart.data()->show();
+    smart.data()->raise();
+    smart.data()->activateWindow();
+
+	connect(smart.data(), &QDialog::finished, [=](int Result)
+	{
+		if (Result && is_top_level && !tasks_.empty())
+		{
+			tasks_.erase(tasks_.begin() + current.row());
+		}
+	});
+
+	return;
+
 	task_list_model->insertModel(task_list_model->createLocalTaskModel(), is_top_level ? -1 : current.row());
 
 	// select and edit newly inserted model
@@ -430,12 +519,44 @@ void TaskView::removeSelectedStages() {
 		m->removeRows(range.top(), range.bottom() - range.top() + 1, range.parent());
 }
 
+void TaskView::removeStages()
+{
+	QModelIndex current = d_ptr->tasks_view->currentIndex();
+	bool isTaskLevel = (current.parent().isValid() & !current.parent().parent().isValid());
+	if (isTaskLevel)
+	{
+		if (!tasks_.empty())
+		{
+			tasks_.erase(tasks_.begin() + current.row());
+		}
+
+		removeSelectedStages();
+	}
+	else
+	{
+		int taskIndex = current.parent().row();
+		tasks_[taskIndex]->stages()->remove(current.row());
+		tasks_[taskIndex]->reset();
+		if (tasks_[taskIndex]->plan())
+		{
+			d_ptr->tasks_view->scrollTo(current.parent());
+			d_ptr->tasks_view->setCurrentIndex(current.parent());
+
+			removeSelectedStages();
+
+			tasks_[taskIndex]->introspection().publishSolution(*tasks_[taskIndex]->solutions().back());
+		}
+	}
+}
+
 void TaskView::onCurrentStageChanged(const QModelIndex& current, const QModelIndex& /*previous*/) {
 	// adding task is allowed on top-level items and sub-top-level items
 	d_ptr->actionAddLocalTask->setEnabled(current.isValid() &&
 	                                      (!current.parent().isValid() || !current.parent().parent().isValid()));
 	// removing stuff is allowed any valid selection except top-level items
-	d_ptr->actionRemoveTaskTreeRows->setEnabled(current.isValid() && current.parent().isValid());
+	// and stages other than the 1st one
+	d_ptr->actionRemoveTaskTreeRows->setEnabled(current.isValid() && ((current.parent().isValid() && !current.parent().parent().isValid())
+		|| (current.parent().isValid() && current.row() > 0)));
 
 	BaseTaskModel* task;
 	QModelIndex task_index;
@@ -470,6 +591,24 @@ void TaskView::onCurrentStageChanged(const QModelIndex& current, const QModelInd
 		view->setModel(m);
 		delete sm;  // we don't store the selection model
 	}
+
+	// update introspection and solution, the active model
+	d_ptr->pushButton_execute->setEnabled(false);
+	bool isTaskLevel = (current.parent().isValid() & !current.parent().parent().isValid());
+	if (isTaskLevel)
+	{
+		int index = current.row() >= tasks_.size() ? tasks_.size() - 1 : current.row();
+		if (!tasks_.empty() && !tasks_[index]->solutions().empty())
+		{
+			tasks_[index]->introspection().publishSolution(*tasks_[index]->solutions().back());
+			d_ptr->pushButton_execute->setEnabled(true);
+		}
+
+		TaskListModel* taskListModel = d_ptr->getTaskListModel(current).first;
+		taskListModel->setActiveTaskModel(d_ptr->getTaskModel(current).first);
+	}	
+	// behaviour of pushbutton save
+	d_ptr->pushButton_save->setEnabled(!tasks_.empty());
 }
 
 void TaskView::onCurrentSolutionChanged(const QModelIndex& current, const QModelIndex& /*previous*/) {
@@ -550,6 +689,421 @@ void TaskView::onOldTaskHandlingChanged() {
 	Q_EMIT oldTaskHandlingChanged(old_task_handling->getOptionInt());
 }
 
+bool TaskView::loadTasks(std::string File)
+{
+	try
+	{
+		YAML::Node tasks = YAML::LoadFile(File);
+
+		for (const auto& task : tasks)
+		{
+			std::string taskName = task["task"].as<std::string>();
+			auto found = std::find_if(tasks_.begin(), tasks_.end(), [taskName](std::shared_ptr<moveit::task_constructor::Task> Task)
+			{
+				return taskName == Task->name();
+			});
+			if (found == tasks_.end())
+			{
+				auto newTask = std::make_shared<moveit::task_constructor::Task>("whi_gui");
+
+				// create Cartesian interpolation "planner" to be used in various stages
+				auto cartesian_interpolation = std::make_shared<moveit::task_constructor::solvers::CartesianPath>();
+				// create a joint-space interpolation "planner" to be used in various stages
+				auto joint_interpolation = std::make_shared<moveit::task_constructor::solvers::JointInterpolationPlanner>();
+
+				// name and current state
+				newTask->setName(taskName);
+				newTask->add(std::make_unique<moveit::task_constructor::stages::CurrentState>("current"));
+
+				// stages in file
+				const auto& stages = task["stage"];
+				for (const auto& stage : stages)
+				{
+					std::string stageName = stage["name"].as<std::string>();
+					std::string planningGroup = stage["group"].as<std::string>();
+					std::string type = stage["type"].as<std::string>();
+					std::string space = stage["space"].as<std::string>();
+					std::shared_ptr<std::string> targetGroup(nullptr);
+					std::shared_ptr<std::vector<double>> targetPose(nullptr);
+					if (stage["target"].size() == 0)
+					{
+						targetGroup = std::make_shared<std::string>(stage["target"].as<std::string>());	
+					}
+					else
+					{
+						targetPose = std::make_shared<std::vector<double>>();
+						for (const auto& it : stage["target"])
+						{
+							targetPose->push_back(it.as<double>());
+						}
+					}
+
+					double duration = stage["duration"].as<double>();
+					if (type == "move_to")
+					{
+						if (targetGroup)
+						{
+							auto stage = space == "joint" ? 
+								std::make_unique<moveit::task_constructor::stages::MoveTo>(stageName, joint_interpolation) :
+								std::make_unique<moveit::task_constructor::stages::MoveTo>(stageName, cartesian_interpolation);
+							stage->setGroup(planningGroup);
+							stage->setGoal(*targetGroup);
+							stage->properties().set("duration_from_previous", duration);
+							newTask->add(std::move(stage));
+						}
+						else if (targetPose)
+						{
+							geometry_msgs::Pose pose;
+							pose.position.x = targetPose->at(0);
+							pose.position.y = targetPose->at(1);
+							pose.position.z = targetPose->at(2);
+							tf2::Quaternion orientation;
+							orientation.setRPY(angles::from_degrees(targetPose->at(3)),
+								angles::from_degrees(targetPose->at(4)),
+								angles::from_degrees(targetPose->at(5)));
+							pose.orientation = tf2::toMsg(orientation);
+
+							geometry_msgs::PoseStamped poseTcp;
+							poseTcp.pose = pose;
+
+							auto stage = space == "joint" ? 
+								std::make_unique<moveit::task_constructor::stages::MoveTo>(stageName, joint_interpolation) :
+								std::make_unique<moveit::task_constructor::stages::MoveTo>(stageName, cartesian_interpolation);
+							stage->setGroup(planningGroup);
+							stage->setGoal(poseTcp);
+							stage->properties().set("duration_from_previous", duration);
+							newTask->add(std::move(stage));
+						}
+					}
+					else if (type == "move_relative")
+					{
+						if (space == "cartesian")
+						{
+							auto stage = std::make_unique<moveit::task_constructor::stages::MoveRelative>(stageName, cartesian_interpolation);
+							stage->setGroup(planningGroup);
+							if (fabs(targetPose->at(0) + targetPose->at(1) + targetPose->at(2)) > 1e-5)
+							{
+								geometry_msgs::Vector3Stamped direction;
+								direction.header.frame_id = "world";
+								direction.vector.x = targetPose->at(0);
+								direction.vector.y = targetPose->at(1);
+								direction.vector.z = targetPose->at(2);
+								stage->setDirection(direction);
+							}
+							else
+							{
+								geometry_msgs::TwistStamped twist;
+								twist.header.frame_id = "world";
+								twist.twist.angular.x = angles::from_degrees(targetPose->at(3));
+								twist.twist.angular.y = angles::from_degrees(targetPose->at(4));
+								twist.twist.angular.z = angles::from_degrees(targetPose->at(5));
+								stage->setDirection(twist);
+							}
+							stage->properties().set("duration_from_previous", duration);
+							newTask->add(std::move(stage));
+						}
+						else if (space == "joint")
+						{
+							newTask->loadRobotModel();
+							std::vector<std::string> jointsName = newTask->getRobotModel()->getVariableNames();
+
+							std::map<std::string, double> offsets;
+							for (std::size_t i = 0; i < std::min(jointsName.size(), targetPose->size()); ++i)
+							{
+								offsets.emplace(jointsName[i], angles::from_degrees(targetPose->at(i)));
+							}
+
+							auto stage = std::make_unique<moveit::task_constructor::stages::MoveRelative>(stageName, cartesian_interpolation);
+							stage->setGroup(planningGroup);
+							stage->setDirection(offsets);
+							stage->properties().set("duration_from_previous", duration);
+							newTask->add(std::move(stage));
+						}
+					}
+				}
+
+				// add to task list
+				tasks_.push_back(newTask);
+
+				if (tasks_.back()->plan())
+				{
+					tasks_.back()->introspection().publishSolution(*tasks_.back()->solutions().back());
+				}
+			}
+		}
+	}
+	catch(const std::exception& e)
+	{
+		std::cout << "failed to load task file " << File << std::endl;
+		return false;
+	}
+}
+
+void TaskView::saveTasks(std::string File)
+{
+	std::string serialized;
+
+	if (d_ptr->tasks_view->selectionModel()->currentIndex().parent().isValid())
+	{
+		int index = d_ptr->tasks_view->selectionModel()->currentIndex().parent().parent().isValid() ? 
+			d_ptr->tasks_view->selectionModel()->currentIndex().parent().row() : d_ptr->tasks_view->selectionModel()->currentIndex().row();
+		
+		serialized = serializeTask(tasks_[index]);
+	}
+	else
+	{
+		for (const auto& it : tasks_)
+		{
+			serialized += serializeTask(it);
+		}
+	}
+
+	if (!serialized.empty())
+	{
+		std::ofstream ofs(File, std::ios::out | std::ios::trunc);
+		if (ofs.good())
+		{
+			ofs.write(serialized.c_str(), serialized.length());
+
+			ofs.close();
+		}
+	}
+}
+
+bool TaskView::getGoal(const moveit::task_constructor::Stage* Stage, std::string& Goal)
+{
+	try
+	{
+		// try named joint pose
+		Goal = boost::any_cast<std::string>(Stage->properties().get("goal"));
+		return true;
+	}
+	catch (const boost::bad_any_cast&)
+	{
+		return false;
+	}
+}
+
+bool TaskView::getGoal(const moveit::task_constructor::Stage* Stage, geometry_msgs::PoseStamped& Goal)
+{
+	try
+	{
+		// try named joint pose
+		Goal = boost::any_cast<geometry_msgs::PoseStamped>(Stage->properties().get("goal"));
+		return true;
+	}
+	catch (const boost::bad_any_cast&)
+	{
+		return false;
+	}
+}
+
+bool TaskView::getOffset(const moveit::task_constructor::Stage* Stage, geometry_msgs::Vector3Stamped& Offset)
+{
+	try
+	{
+		// try named joint pose
+		Offset = boost::any_cast<geometry_msgs::Vector3Stamped>(Stage->properties().get("direction"));
+		return true;
+	}
+	catch (const boost::bad_any_cast&)
+	{
+		return false;
+	}
+}
+
+bool TaskView::getOffset(const moveit::task_constructor::Stage* Stage, geometry_msgs::TwistStamped& Offset)
+{
+	try
+	{
+		// try named joint pose
+		Offset = boost::any_cast<geometry_msgs::TwistStamped>(Stage->properties().get("direction"));
+		return true;
+	}
+	catch (const boost::bad_any_cast&)
+	{
+		return false;
+	}
+}
+
+bool TaskView::getOffset(const moveit::task_constructor::Stage* Stage, std::map<std::string, double>& Offset)
+{
+	try
+	{
+		// try named joint pose
+		Offset = boost::any_cast<std::map<std::string, double>>(Stage->properties().get("direction"));
+		return true;
+	}
+	catch (const boost::bad_any_cast&)
+	{
+		return false;
+	}
+}
+
+std::string TaskView::serializeTask(std::shared_ptr<moveit::task_constructor::Task> Task)
+{
+	std::string serialized;
+
+	std::string line("- task: " + Task->name() + "\n");
+	serialized += line;
+	line.assign("  stage:\n");
+	serialized += line;
+	for (int i = 1; i < Task->stages()->numChildren(); ++i)
+	{
+		// name
+		const moveit::task_constructor::Stage* stage = Task->stages()->childByIndex(i);
+		line.assign("    - name: " + stage->name() + "\n");
+		serialized += line;
+		// group
+		line.assign("      group: " + boost::any_cast<std::string>(stage->properties().get("group")) + "\n");
+		serialized += line;
+		// type, space, target, duration
+		std::string space;
+		std::string target;
+		std::string duration;
+		line.assign("      type: ");
+		if (const moveit::task_constructor::stages::MoveTo* dStage =
+			dynamic_cast<const moveit::task_constructor::stages::MoveTo*>(stage); dStage != nullptr)
+		{
+			// type
+			line += "move_to\n";
+
+			// space
+			if (const moveit::task_constructor::solvers::JointInterpolationPlanner* dPlanner = 
+				dynamic_cast<const moveit::task_constructor::solvers::JointInterpolationPlanner*>(dStage->planner().get()); dPlanner != nullptr)
+			{
+				space = "joint\n";
+			}
+			else if (const moveit::task_constructor::solvers::CartesianPath* dPlanner = 
+				dynamic_cast<const moveit::task_constructor::solvers::CartesianPath*>(dStage->planner().get()); dPlanner != nullptr)
+			{
+				space = "cartesian\n";
+			}
+			else
+			{
+				space = "joint\n";
+			}
+
+			// target
+			std::string goalGroup;
+			geometry_msgs::PoseStamped goalPose;
+			if (getGoal(dStage, goalGroup))
+			{
+				target = goalGroup + "\n";
+			}
+			else if (getGoal(dStage, goalPose))
+			{
+				tf::Quaternion quat(goalPose.pose.orientation.x, goalPose.pose.orientation.y,
+					goalPose.pose.orientation.z, goalPose.pose.orientation.w);
+				double roll = 0.0, pitch = 0.0, yaw = 0.0;
+				tf::Matrix3x3(quat).getRPY(roll, pitch, yaw);
+
+				target.assign("[" + std::to_string(goalPose.pose.position.x) + ", " +
+					std::to_string(goalPose.pose.position.y) + ", " +
+					std::to_string(goalPose.pose.position.z) + ", " +
+					std::to_string(angles::to_degrees(roll)) + ", " +
+					std::to_string(angles::to_degrees(pitch)) + ", " +
+					std::to_string(angles::to_degrees(yaw)) + "]\n");
+			}
+
+			// duration from previous
+			double preDuration = dStage->properties().get<double>("duration_from_previous");
+			duration.assign(std::to_string(preDuration) + "\n");
+		}
+		else if (const moveit::task_constructor::stages::MoveRelative* dStage =
+			dynamic_cast<const moveit::task_constructor::stages::MoveRelative*>(stage); dStage != nullptr)
+		{
+			// type
+			line += "move_relative\n";
+
+			// space
+			space = "cartesian\n";
+
+			// target
+			geometry_msgs::Vector3Stamped offsetPose;
+			geometry_msgs::TwistStamped offsetTwist;
+			std::map<std::string, double> offsetJoints;
+			if (getOffset(dStage, offsetPose))
+			{
+				target.assign("[" + std::to_string(offsetPose.vector.x) + ", " +
+					std::to_string(offsetPose.vector.y) + ", " +
+					std::to_string(offsetPose.vector.z) + ", 0.0, 0.0, 0.0]\n");
+			}
+			else if (getOffset(dStage, offsetTwist))
+			{
+				target.assign("[0.0, 0.0, 0.0, " + std::to_string(offsetTwist.twist.angular.x) + ", " +
+					std::to_string(offsetTwist.twist.angular.y) + ", " +
+					std::to_string(offsetTwist.twist.angular.z) + "]\n");
+			}
+			else if (getOffset(dStage, offsetJoints))
+			{
+				target.assign("[");
+				for (const auto it : offsetJoints)
+				{
+					target += std::to_string(it.second) + ", ";
+				}
+				target.pop_back();
+				target.pop_back();
+				target += "]\n";
+			}
+
+			// duration from previous
+			double preDuration = dStage->properties().get<double>("duration_from_previous");
+			duration.assign(std::to_string(preDuration) + "\n");
+		}
+		else
+		{
+			line += "move_to\n";
+		}
+		serialized += line;
+		// space
+		line.assign("      space: " + space);
+		serialized += line;
+		// target
+		line.assign("      target: " + target);
+		serialized += line;
+		// duration
+		if (!duration.empty())
+		{
+			line.assign("      duration: " + duration);
+		}
+		serialized += line;
+	}
+
+	return serialized;
+}
+
+void TaskView::execute()
+{
+	std::thread{ std::bind(&TaskView::threadExecute, this) }.detach();
+}
+
+void TaskView::threadExecute()
+{
+	QModelIndex current = d_ptr->tasks_view->currentIndex();
+	if (!tasks_[current.row()]->solutions().empty())
+	{
+		do
+		{
+			tasks_[current.row()]->execute(*tasks_[current.row()]->solutions().back());
+#ifdef VIEW_TRAJECTORY
+			moveit_task_constructor_msgs::ExecuteTaskSolutionGoal traj;
+			tasks_[current.row()]->solutions().back()->fillMessage(traj.solution);
+			std::cout << "count of sub trajectory " << traj.solution.sub_trajectory.size() << std::endl;
+			for (int i = 0; i < traj.solution.sub_trajectory.size(); ++i)
+			{
+				std::cout << "traj " << i << " with points " << traj.solution.sub_trajectory[i].trajectory.joint_trajectory.points.size() << std::endl;
+			}
+#endif
+
+			std::this_thread::sleep_for(std::chrono::milliseconds(int(d_ptr->doubleSpinBox_span->value() * 1000.0)));
+		}
+		while (d_ptr->checkBox_loop->isChecked());
+	}
+
+	d_ptr->pushButton_execute->setEnabled(true);
+}
+
 GlobalSettingsWidgetPrivate::GlobalSettingsWidgetPrivate(GlobalSettingsWidget* widget, rviz::Property* root)
   : q_ptr(widget) {
 	setupUi(widget);
@@ -579,3 +1133,4 @@ void GlobalSettingsWidget::load(const rviz::Config& config) {
 }  // namespace moveit_rviz_plugin
 
 #include "moc_task_panel.cpp"
+

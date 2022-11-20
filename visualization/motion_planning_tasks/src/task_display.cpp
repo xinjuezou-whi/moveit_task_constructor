@@ -57,6 +57,11 @@
 #include <OgreSceneNode.h>
 #include <QTimer>
 
+#include <visualization_msgs/InteractiveMarker.h>
+#include <moveit/robot_interaction/interactive_marker_helpers.h>
+#include <moveit/robot_interaction/robot_interaction.h>
+#include <interactive_markers/tools.h>
+
 namespace moveit_rviz_plugin {
 
 TaskDisplay::TaskDisplay() : Display(), panel_requested_(false), received_task_description_(false) {
@@ -297,6 +302,62 @@ void TaskDisplay::onTaskDataChanged(const QModelIndex& topLeft, const QModelInde
 		if (topLeft.column() <= 1 && 1 <= bottomRight.column())  // #solutions changed
 			child->setValue(topLeft.sibling(row, 1).data());
 	}
+}
+
+void TaskDisplay::visualizeInteractiveMarkers(int Index, const std::vector<geometry_msgs::PoseStamped>& Poses, const InteractiveMarkerProcessFeedback& FeedbackFunc)
+{
+	interactive_marker_func_ = FeedbackFunc;
+	clearInteractiveMarkers();
+	interactive_markers_.resize(Poses.size());
+
+	for (std::size_t i = 0; i < Poses.size(); ++i)
+	{
+		visualization_msgs::Marker wayPointMarker;
+		wayPointMarker.type = visualization_msgs::Marker::ARROW;
+		wayPointMarker.action = visualization_msgs::Marker::ADD;
+		wayPointMarker.scale.x = 0.05;
+		wayPointMarker.scale.y = 0.01;
+		wayPointMarker.scale.z = 0.01;
+		wayPointMarker.color.a = 1.0; // don't forget to set the alpha
+		wayPointMarker.color.r = 0.0;
+		wayPointMarker.color.g = 1.0;
+		wayPointMarker.color.b = 0.0;
+
+		visualization_msgs::InteractiveMarkerControl controlMove3d;
+		controlMove3d.always_visible = true;
+		controlMove3d.interaction_mode = visualization_msgs::InteractiveMarkerControl::MOVE_ROTATE_3D;
+		controlMove3d.name = "move";
+		controlMove3d.markers.push_back(wayPointMarker);
+
+		visualization_msgs::InteractiveMarker imarker = i == Index ? robot_interaction::make6DOFMarker("marker_scene_object", Poses[i], 2.0 * wayPointMarker.scale.x) :
+			robot_interaction::makeEmptyInteractiveMarker("marker_scene_object", Poses[i], wayPointMarker.scale.x);
+		imarker.name = std::to_string(i + 1);
+		imarker.description = imarker.name;
+		imarker.controls.push_back(controlMove3d);
+		interactive_markers::autoComplete(imarker);
+
+		interactive_markers_[i].reset(new rviz::InteractiveMarker(getSceneNode(), context_));
+		interactive_markers_[i]->processMessage(imarker);
+		interactive_markers_[i]->setShowAxes(false);
+
+		// connect signals
+		connect(interactive_markers_[i].get(), SIGNAL(userFeedback(visualization_msgs::InteractiveMarkerFeedback&)), this, 
+		SLOT(interactiveMarkerProcessFeedback(visualization_msgs::InteractiveMarkerFeedback&)));
+	}
+}
+
+void TaskDisplay::clearInteractiveMarkers()
+{
+	for (auto& it : interactive_markers_)
+	{
+		it.reset();
+	}
+	interactive_markers_.clear();
+}
+
+void TaskDisplay::interactiveMarkerProcessFeedback(visualization_msgs::InteractiveMarkerFeedback& Feedback)
+{
+	interactive_marker_func_(std::stoi(Feedback.marker_name) - 1, Feedback);
 }
 
 }  // namespace moveit_rviz_plugin

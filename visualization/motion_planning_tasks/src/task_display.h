@@ -50,6 +50,9 @@
 #include <moveit_task_constructor_msgs/Solution.h>
 #endif
 
+#include <rviz/default_plugin/interactive_markers/interactive_marker.h>
+#include <geometry_msgs/PoseStamped.h>
+
 namespace rviz {
 class StringProperty;
 class RosTopicProperty;
@@ -93,6 +96,11 @@ public:
 	inline void clearMarkers() { trajectory_visual_->clearMarkers(); }
 	inline void addMarkers(const DisplaySolutionPtr& s) { trajectory_visual_->addMarkers(s); }
 
+	// waypoint
+	using InteractiveMarkerProcessFeedback = std::function<void(int Index, visualization_msgs::InteractiveMarkerFeedback&)>;
+	void clearInteractiveMarkers();
+	void visualizeInteractiveMarkers(int Index, const std::vector<geometry_msgs::PoseStamped>& Poses, const InteractiveMarkerProcessFeedback& FeedbackFunc);
+
 protected:
 	void onInitialize() override;
 	void onEnable() override;
@@ -116,6 +124,8 @@ private Q_SLOTS:
 	void taskDescriptionCB(const moveit_task_constructor_msgs::TaskDescriptionConstPtr& msg);
 	void taskStatisticsCB(const moveit_task_constructor_msgs::TaskStatisticsConstPtr& msg);
 	void taskSolutionCB(const moveit_task_constructor_msgs::SolutionConstPtr& msg);
+	// waypoint
+	void interactiveMarkerProcessFeedback(visualization_msgs::InteractiveMarkerFeedback& Feedback);
 
 protected:
 	ros::Subscriber task_solution_sub;
@@ -141,6 +151,10 @@ protected:
 	rviz::StringProperty* robot_description_property_;
 	rviz::RosTopicProperty* task_solution_topic_property_;
 	rviz::Property* tasks_property_;
+
+	// Interactive mark
+	std::vector<std::shared_ptr<rviz::InteractiveMarker>> interactive_markers_;
+	InteractiveMarkerProcessFeedback interactive_marker_func_{ nullptr };
 };
 
 }  // namespace moveit_rviz_plugin

@@ -92,6 +92,8 @@ public:
 		setProperty("path_constraints", std::move(path_constraints));
 	}
 
+	const solvers::PlannerInterfacePtr planner() const { return planner_; };
+
 protected:
 	// return false if trajectory shouldn't be stored
 	bool compute(const InterfaceState& state, planning_scene::PlanningScenePtr& scene, SubTrajectory& trajectory,

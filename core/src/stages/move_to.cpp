@@ -245,6 +245,9 @@ bool MoveTo::compute(const InterfaceState& state, planning_scene::PlanningSceneP
 		scene->setCurrentState(robot_trajectory->getLastWayPoint());
 		if (dir == Interface::BACKWARD)
 			robot_trajectory->reverse();
+
+		double pre_duration = props.get<double>("duration_from_previous");
+		robot_trajectory->setWayPointDurationFromPrevious(0, pre_duration);
 		solution.setTrajectory(robot_trajectory);
 
 		if (!success)
