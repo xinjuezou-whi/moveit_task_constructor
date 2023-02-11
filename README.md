@@ -51,12 +51,14 @@ Right-click the root node("Motion Planning Tasks") of "Task Tree", and then sele
 
 
 ### By the demo of MoveIt
-If you are running other launch of MoveIt like "demo.launch", first introduce the capability of "ExecuteTaskSolutionCapability" otherwise the execute will not be respond. Add following content after the include of "move_group.launch":
+If you are running other launch of MoveIt like "demo.launch", first introduce the capability of "ExecuteTaskSolutionCapability" otherwise the execute will not be respond. Add following content following the include of "move_group.launch":
 ```
 <param name="move_group/capabilities" value="move_group/ExecuteTaskSolutionCapability" />
 ```
 ![image](https://user-images.githubusercontent.com/72239958/193467049-597e3795-b11d-4762-895c-787b3dec2b71.png)
 
+or set the value "move_group/ExecuteTaskSolutionCapability" to param "capabilities" in file "move_group.launch":
+![image](https://user-images.githubusercontent.com/72239958/218240301-1441bb69-38f8-47fe-884f-5c60587a7eb7.png)
 
 Please note that MoveIt Task Construct requires the tip of end effector at motion planning for frame transform, otherwise the planning would be failed. This can be infered from the function "getRobotTipForFrame" of file "utils.cpp":
 ![image](https://user-images.githubusercontent.com/72239958/193467355-90e21e41-bef8-4ffe-a0c7-7199e1d4990a.png)
