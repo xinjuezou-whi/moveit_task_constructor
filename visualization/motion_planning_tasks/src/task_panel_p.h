@@ -103,4 +103,3 @@ public:
 	rviz::PropertyTreeModel* properties;
 };
 }  // namespace moveit_rviz_plugin
-

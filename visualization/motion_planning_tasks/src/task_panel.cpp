@@ -1133,4 +1133,3 @@ void GlobalSettingsWidget::load(const rviz::Config& config) {
 }  // namespace moveit_rviz_plugin
 
 #include "moc_task_panel.cpp"
-

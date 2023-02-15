@@ -202,4 +202,3 @@ public:
 	void load(const rviz::Config& config) override;
 };
 }  // namespace moveit_rviz_plugin
-

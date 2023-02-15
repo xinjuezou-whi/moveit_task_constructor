@@ -341,18 +341,10 @@ Stage* ContainerBase::findChild(const std::string& name) const {
 	return nullptr;
 }
 
-const Stage* ContainerBase::childByIndex(int Index) const
-{
-	if (Index >= 0 && Index < numChildren())
-	{
-		auto it = pimpl()->children().begin();
-		std::advance(it, Index);
-		return it->get();
-	}
-	else
-	{
-		return nullptr;
-	}
+Stage* ContainerBase::operator[](int index) const {
+	auto impl = pimpl();
+	auto it = impl->childByIndex(index, false);
+	return it != impl->children().end() ? it->get() : nullptr;
 }
 
 bool ContainerBase::traverseChildren(const ContainerBase::StageCallback& processor) const {
