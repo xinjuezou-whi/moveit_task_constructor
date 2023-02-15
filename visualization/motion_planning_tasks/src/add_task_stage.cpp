@@ -802,7 +802,7 @@ namespace moveit_rviz_plugin
 
 	std::string DlgAddTaskStage::getPlanningGroupOfTask()
 	{
-		const moveit::task_constructor::Stage* stage = task_->stages()->childByIndex(task_->stages()->numChildren() - 1);
+		const moveit::task_constructor::Stage* stage = (*task_->stages())[task_->stages()->numChildren() - 1];
 		if (task_->stages()->numChildren() > 1 && stage)
 		{
 			// stage current has no group property

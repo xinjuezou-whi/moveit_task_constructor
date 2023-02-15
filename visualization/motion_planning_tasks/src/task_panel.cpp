@@ -948,10 +948,10 @@ std::string TaskView::serializeTask(std::shared_ptr<moveit::task_constructor::Ta
 	serialized += line;
 	line.assign("  stage:\n");
 	serialized += line;
-	for (int i = 1; i < Task->stages()->numChildren(); ++i)
+	for (size_t i = 1; i < Task->stages()->numChildren(); ++i)
 	{
 		// name
-		const moveit::task_constructor::Stage* stage = Task->stages()->childByIndex(i);
+		const moveit::task_constructor::Stage* stage = (*Task->stages())[i];
 		line.assign("    - name: " + stage->name() + "\n");
 		serialized += line;
 		// group

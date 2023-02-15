@@ -24,7 +24,7 @@ Currently, it only supports the serial container that contains the MoveTo and Mo
 Go into your catkin workspace and initialize wstool if necessary (assuming ~/catkin_workspace as workspace path):
 ```
 cd ~/catkin_workspace/src
-git clone https://github.com/xinjuezou-whi/moveit_task_constructor.git
+git clone --recurse-submodule https://github.com/xinjuezou-whi/moveit_task_constructor.git
 ```
 
 Install missing packages with rosdep:
