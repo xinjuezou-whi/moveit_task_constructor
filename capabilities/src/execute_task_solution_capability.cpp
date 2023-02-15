@@ -109,11 +109,11 @@ void ExecuteTaskSolutionCapability::goalCallback(
 		result.error_code = context_->plan_execution_->executeAndMonitor(plan);
 	}
 
-#if HAVE_MOVEIT_ERROR_CODE_TO_STRING
+//#if HAVE_MOVEIT_ERROR_CODE_TO_STRING
 	const std::string response = moveit::core::MoveItErrorCode::toString(result.error_code);
-#else
-	const std::string response = context_->plan_execution_->getErrorCodeString(result.error_code);
-#endif
+//#else
+//	const std::string response = context_->plan_execution_->getErrorCodeString(result.error_code);
+//#endif
 
 	if (result.error_code.val == moveit_msgs::MoveItErrorCodes::SUCCESS)
 		as_->setSucceeded(result, response);
