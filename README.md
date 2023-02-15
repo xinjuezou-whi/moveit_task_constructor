@@ -14,7 +14,8 @@ Currently, it only supports the serial container that contains the MoveTo and Mo
 | container.h container.cpp                  | moveit_task_constructor_core            | refactor | added access element function by index                            |
 | cartesian_path.h joint_interpolation.h     | moveit_task_constructor_core            | refactor | added planner access                                              |
 | introspection.cpp                          | moveit_task_constructor_core            | refactor | refactored the namespace from private to public                   |
-| move_to.cpp                                | moveit_task_constructor_core            | refactor | modify the duration from previous by property                     |
+| move_to.cpp move_relative.cpp              | moveit_task_constructor_core            | refactor | modify the duration from previous by property                     |
+| move_to.h move_relative.h                  | moveit_task_constructor_core            | refactor | add get planner interface                                         |
 | CMakeLists.txt                             | moveit_task_constructor_visualization   | refactor | new file's manifest                                               |
 | add_task_stage.h add_task_stage.cpp        | moveit_task_constructor_visualization   | new      | properties and behaviors of widgets of GUI logics                 |
 | whi_logo.png                               | moveit_task_constructor_visualization   | new      | logo image                                                        |
