@@ -56,6 +56,7 @@
 namespace rviz {
 class StringProperty;
 class RosTopicProperty;
+class FloatProperty;
 }  // namespace rviz
 
 namespace moveit {
@@ -125,6 +126,7 @@ private Q_SLOTS:
 	void taskStatisticsCB(const moveit_task_constructor_msgs::TaskStatisticsConstPtr& msg);
 	void taskSolutionCB(const moveit_task_constructor_msgs::SolutionConstPtr& msg);
 	// waypoint
+	void changedInteractiveMarkerScale();
 	void interactiveMarkerProcessFeedback(visualization_msgs::InteractiveMarkerFeedback& Feedback);
 
 protected:
@@ -153,8 +155,11 @@ protected:
 	rviz::Property* tasks_property_;
 
 	// Interactive mark
+	rviz::FloatProperty* interactive_marker_scale_property_{ nullptr };
 	std::vector<std::shared_ptr<rviz::InteractiveMarker>> interactive_markers_;
 	InteractiveMarkerProcessFeedback interactive_marker_func_{ nullptr };
+	int current_index_{ 0 };
+  	std::vector<geometry_msgs::PoseStamped> interactive_marker_poses_;
 };
 
 }  // namespace moveit_rviz_plugin

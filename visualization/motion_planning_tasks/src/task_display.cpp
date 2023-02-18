@@ -53,6 +53,7 @@
 #include <rviz/properties/string_property.h>
 #include <rviz/properties/ros_topic_property.h>
 #include <rviz/properties/status_property.h>
+#include <rviz/properties/float_property.h>
 #include <rviz/frame_manager.h>
 #include <OgreSceneNode.h>
 #include <QTimer>
@@ -90,6 +91,12 @@ TaskDisplay::TaskDisplay() : Display(), panel_requested_(false), received_task_d
 	        SLOT(highlightStage(size_t)));
 
 	tasks_property_ = new rviz::Property("Tasks", QVariant(), "Tasks received on monitored topic", this);
+
+	interactive_marker_scale_property_ =
+      new rviz::FloatProperty("Interactive Marker Size", 0.0f,
+                              "Specifies scale of the interactive marker for waypoint. 0 is auto scale.",
+                              this, SLOT(changedInteractiveMarkerScale()), this);
+  	interactive_marker_scale_property_->setMin(0.0f);
 }
 
 TaskDisplay::~TaskDisplay() {
@@ -306,22 +313,33 @@ void TaskDisplay::onTaskDataChanged(const QModelIndex& topLeft, const QModelInde
 
 void TaskDisplay::visualizeInteractiveMarkers(int Index, const std::vector<geometry_msgs::PoseStamped>& Poses, const InteractiveMarkerProcessFeedback& FeedbackFunc)
 {
-	interactive_marker_func_ = FeedbackFunc;
-	clearInteractiveMarkers();
-	interactive_markers_.resize(Poses.size());
+	current_index_ = Index;
+	if (&interactive_marker_poses_ != &Poses)
+	{
+		interactive_marker_poses_ = Poses;
+	}
 
-	for (std::size_t i = 0; i < Poses.size(); ++i)
+	if (FeedbackFunc)
+	{
+		interactive_marker_func_ = FeedbackFunc;
+	}
+	clearInteractiveMarkers();
+	interactive_markers_.resize(interactive_marker_poses_.size());
+
+	for (std::size_t i = 0; i < interactive_marker_poses_.size(); ++i)
 	{
 		visualization_msgs::Marker wayPointMarker;
 		wayPointMarker.type = visualization_msgs::Marker::ARROW;
 		wayPointMarker.action = visualization_msgs::Marker::ADD;
-		wayPointMarker.scale.x = 0.05;
-		wayPointMarker.scale.y = 0.01;
-		wayPointMarker.scale.z = 0.01;
-		wayPointMarker.color.a = 1.0; // don't forget to set the alpha
-		wayPointMarker.color.r = 0.0;
-		wayPointMarker.color.g = 1.0;
-		wayPointMarker.color.b = 0.0;
+		float scale = interactive_marker_scale_property_->getFloat();
+    	scale = scale < 1e-5 ? 0.1 : scale;
+    	wayPointMarker.scale.x = scale;
+    	wayPointMarker.scale.y = scale / 5.0;
+    	wayPointMarker.scale.z = scale / 5.0;
+    	wayPointMarker.color.a = 1.0; // don't forget to set the alpha
+    	wayPointMarker.color.r = 0.0;
+    	wayPointMarker.color.g = 1.0;
+    	wayPointMarker.color.b = 0.0;
 
 		visualization_msgs::InteractiveMarkerControl controlMove3d;
 		controlMove3d.always_visible = true;
@@ -330,7 +348,7 @@ void TaskDisplay::visualizeInteractiveMarkers(int Index, const std::vector<geome
 		controlMove3d.markers.push_back(wayPointMarker);
 
 		visualization_msgs::InteractiveMarker imarker = i == Index ? robot_interaction::make6DOFMarker("marker_scene_object", Poses[i], 2.0 * wayPointMarker.scale.x) :
-			robot_interaction::makeEmptyInteractiveMarker("marker_scene_object", Poses[i], wayPointMarker.scale.x);
+			robot_interaction::makeEmptyInteractiveMarker("marker_scene_object", interactive_marker_poses_[i], wayPointMarker.scale.x);
 		imarker.name = std::to_string(i + 1);
 		imarker.description = imarker.name;
 		imarker.controls.push_back(controlMove3d);
@@ -355,9 +373,17 @@ void TaskDisplay::clearInteractiveMarkers()
 	interactive_markers_.clear();
 }
 
+void TaskDisplay::changedInteractiveMarkerScale()
+{
+	visualizeInteractiveMarkers(current_index_, interactive_marker_poses_, nullptr);
+}
+
 void TaskDisplay::interactiveMarkerProcessFeedback(visualization_msgs::InteractiveMarkerFeedback& Feedback)
 {
-	interactive_marker_func_(std::stoi(Feedback.marker_name) - 1, Feedback);
+	if (interactive_marker_func_)
+	{
+		interactive_marker_func_(std::stoi(Feedback.marker_name) - 1, Feedback);
+	}
 }
 
 }  // namespace moveit_rviz_plugin
