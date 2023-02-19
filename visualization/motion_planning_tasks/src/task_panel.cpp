@@ -359,7 +359,7 @@ TaskView::TaskView(moveit_rviz_plugin::TaskPanel* parent, rviz::Property* root)
 	d_ptr->configureExistingModels();
 
 	// WHI version
-	std::cout << "\nWHI MoveIt Task Constructor GUI demo VERSION 00.06" << std::endl;
+	std::cout << "\nWHI MoveIt Task Constructor GUI demo VERSION 00.07" << std::endl;
 	std::cout << "Copyright © 2022-2024 Wheel Hub Intelligent Co.,Ltd. All rights reserved\n" << std::endl;
 	// WHI logo
 	boost::filesystem::path path(ros::package::getPath("moveit_task_constructor_visualization"));

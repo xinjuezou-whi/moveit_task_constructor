@@ -48,10 +48,19 @@ All text above must be included in any redistribution.
 
 namespace moveit_rviz_plugin
 {
-	//DlgAddTaskStage::DlgAddTaskStage(TaskListModel* Model, TaskDisplay* Display, int Type, QWidget* Parent/* = nullptr*/)
-	DlgAddTaskStage::DlgAddTaskStage(std::shared_ptr<moveit::task_constructor::Task> Task, TaskDisplay* Display, int Type, QWidget* Parent/* = nullptr*/)
+	DlgAddTaskStage::DlgAddTaskStage(std::shared_ptr<moveit::task_constructor::Task> Task,
+		TaskDisplay* Display, int Type, QWidget* Parent/* = nullptr*/)
 		: type_(Type), task_(Task), display_(Display), QDialog(Parent)
+		, node_handle_(std::make_unique<ros::NodeHandle>())
 	{
+		sub_interactive_goal_ = std::make_unique<ros::Subscriber>(
+			node_handle_->subscribe<visualization_msgs::InteractiveMarkerFeedback>(
+            "/rviz_moveit_motion_planning_display/robot_interaction_interactive_marker_topic/feedback",
+			1, [this](const visualization_msgs::InteractiveMarkerFeedbackConstPtr& Feedback)
+			{
+				current_goal_ = Feedback->pose;
+            }));
+
 		QString title = Type == TYPE_TASK ? "Add Task with Stage" : "Add Stage to Task";
 
 		setWindowTitle(title);
@@ -137,8 +146,10 @@ namespace moveit_rviz_plugin
 
 		groupBoxMode->setLayout(vBox);
 
-		connect(combxPlanningGroup, &QComboBox::currentTextChanged, this, [=](const QString& Text) { onPlanningGroupTextChanged(Text); });
-		connect(combx_mode_, QOverload<int>::of(&QComboBox::activated), this, [=](int Index) { onModeIndexChanged(Index, this); });
+		connect(combxPlanningGroup, &QComboBox::currentTextChanged, this,
+			[=](const QString& Text) { onPlanningGroupTextChanged(Text); });
+		connect(combx_mode_, QOverload<int>::of(&QComboBox::activated), this,
+			[=](int Index) { onModeIndexChanged(Index, this); });
 
 		layoutMain->addWidget(groupBoxMode);
 
@@ -174,8 +185,10 @@ namespace moveit_rviz_plugin
 		hBox->addStretch();
 		layoutMain->addLayout(hBox);
 
-		connect(radioPoseGroup, &QRadioButton::clicked, this, [=](bool Checked) { onMoveToTargetChecked(Checked, radioPoseGroup->text(), groupMoveTo); });
-		connect(radioTcp, &QRadioButton::clicked, this, [=](bool Checked) { onMoveToTargetChecked(Checked, radioTcp->text(), groupMoveTo); });
+		connect(radioPoseGroup, &QRadioButton::clicked, this,
+			[=](bool Checked) { onMoveToTargetChecked(Checked, radioPoseGroup->text(), groupMoveTo); });
+		connect(radioTcp, &QRadioButton::clicked, this,
+			[=](bool Checked) { onMoveToTargetChecked(Checked, radioTcp->text(), groupMoveTo); });
 
 		radioPoseGroup->setChecked(true);
 
@@ -201,8 +214,10 @@ namespace moveit_rviz_plugin
 		hBox->addStretch();
 		layoutMain->addLayout(hBox);
 
-		connect(radioTcp, &QRadioButton::clicked, this, [=](bool Checked) { onMoveRelativeTargetChecked(Checked, radioTcp->text(), groupMoveRelative); });
-		connect(radioJoint, &QRadioButton::clicked, this, [=](bool Checked) { onMoveRelativeTargetChecked(Checked, radioJoint->text(), groupMoveRelative); });
+		connect(radioTcp, &QRadioButton::clicked, this,
+			[=](bool Checked) { onMoveRelativeTargetChecked(Checked, radioTcp->text(), groupMoveRelative); });
+		connect(radioJoint, &QRadioButton::clicked, this,
+			[=](bool Checked) { onMoveRelativeTargetChecked(Checked, radioJoint->text(), groupMoveRelative); });
 
 		radioTcp->setChecked(true);
 
@@ -245,8 +260,10 @@ namespace moveit_rviz_plugin
 		connect(buttonAdd, &QPushButton::clicked, this, [=]() { onWaypointsAddClicked(current); });
 		connect(buttonInsert, &QPushButton::clicked, this, [=]() { onWaypointsInsertClicked(current); });
 		connect(buttonRemove, &QPushButton::clicked, this, [=]() { onWaypointsRemoveClicked(current); });
-		connect(table_waypoints_.data(), &QTableWidget::cellChanged, this, [=](int Row, int Column) { visualizeWaypoints(table_waypoints_.data(), Row); });
-    	connect(table_waypoints_.data(), &QTableWidget::currentCellChanged, this, [=](int Row, int Column) { visualizeWaypoints(table_waypoints_.data(), Row); });
+		connect(table_waypoints_.data(), &QTableWidget::cellChanged, this,
+			[=](int Row, int Column) { visualizeWaypoints(table_waypoints_.data(), Row); });
+    	connect(table_waypoints_.data(), &QTableWidget::currentCellChanged, this,
+			[=](int Row, int Column) { visualizeWaypoints(table_waypoints_.data(), Row); });
 		connect(table_waypoints_.data(), &QTableWidget::customContextMenuRequested, this, [=](const QPoint& Pos)
 		{
         	QMenu* menu = new QMenu;
@@ -256,12 +273,15 @@ namespace moveit_rviz_plugin
 				QTableWidgetItem* item = table_waypoints_.data()->itemAt(Pos);
 
 				geometry_msgs::Pose currentPose = queryCurrent();
-				tf::Quaternion quat(currentPose.orientation.x, currentPose.orientation.y, currentPose.orientation.z, currentPose.orientation.w);
+				tf::Quaternion quat(currentPose.orientation.x, currentPose.orientation.y, currentPose.orientation.z,
+					currentPose.orientation.w);
   				double roll = 0.0, pitch = 0.0, yaw = 0.0;
   				tf::Matrix3x3(quat).getRPY(roll, pitch, yaw);
 
-				std::shared_ptr<QStringList> data = std::make_shared<QStringList>(QStringList({ QString::number(currentPose.position.x), QString::number(currentPose.position.y), QString::number(currentPose.position.z),
-					QString::number(angles::to_degrees(roll)), QString::number(angles::to_degrees(pitch)), QString::number(angles::to_degrees(yaw)) }));
+				std::shared_ptr<QStringList> data = std::make_shared<QStringList>(
+					QStringList({ QString::number(currentPose.position.x), QString::number(currentPose.position.y),
+					QString::number(currentPose.position.z), QString::number(angles::to_degrees(roll)),
+					QString::number(angles::to_degrees(pitch)), QString::number(angles::to_degrees(yaw)) }));
 				fillRowWith(table_waypoints_.data(), item->row(), data);
 
 				action->deleteLater();
@@ -324,7 +344,8 @@ namespace moveit_rviz_plugin
 		vBox->addLayout(hBox);
 
 		connect(buttonCurrent, &QPushButton::clicked, this, [=]() { onMoveToTcpCurrentClicked(); });
-		connect(table_tcp_.data(), &QTableWidget::cellChanged, this, [=](int Row, int Column) { visualizeWaypoints(table_tcp_.data(), Row);  });
+		connect(table_tcp_.data(), &QTableWidget::cellChanged, this,
+			[=](int Row, int Column) { visualizeWaypoints(table_tcp_.data(), Row);  });
 
 		// interactive marker
 		geometry_msgs::PoseStamped pose;
@@ -357,11 +378,13 @@ namespace moveit_rviz_plugin
 			std::vector<geometry_msgs::Pose> waypoints;
 			retrieveWaypoints(table_tcp_.data(), waypoints);
 
-			tf::Quaternion quatTable(waypoints.front().orientation.x, waypoints.front().orientation.y, waypoints.front().orientation.z, waypoints.front().orientation.w);
+			tf::Quaternion quatTable(waypoints.front().orientation.x, waypoints.front().orientation.y,
+				waypoints.front().orientation.z, waypoints.front().orientation.w);
 			double rollTable = 0.0, pitchTable = 0.0, yawTable = 0.0;
 			tf::Matrix3x3(quatTable).getRPY(rollTable, pitchTable, yawTable);
 
-			tf::Quaternion quatReference(frame_reference_.orientation.x, frame_reference_.orientation.y, frame_reference_.orientation.z, frame_reference_.orientation.w);
+			tf::Quaternion quatReference(frame_reference_.orientation.x, frame_reference_.orientation.y,
+				frame_reference_.orientation.z, frame_reference_.orientation.w);
 			double rollReference = 0.0, pitchReference = 0.0, yawReference = 0.0;
 			tf::Matrix3x3(quatReference).getRPY(rollReference, pitchReference, yawReference);
 
@@ -377,7 +400,9 @@ namespace moveit_rviz_plugin
 
 			std::vector<geometry_msgs::PoseStamped> poses;
 			poses.push_back(pose);
-			display_->visualizeInteractiveMarkers(0, poses, std::bind(&DlgAddTaskStage::interactiveMarkerProcessFeedback, this, std::placeholders::_1, std::placeholders::_2));
+			display_->visualizeInteractiveMarkers(0, poses,
+				std::bind(&DlgAddTaskStage::interactiveMarkerProcessFeedback,
+				this, std::placeholders::_1, std::placeholders::_2));
 		});
 
 		// TCP only runs in Cartesian space
@@ -390,7 +415,9 @@ namespace moveit_rviz_plugin
 		pose.pose = frame_reference_;
 		std::vector<geometry_msgs::PoseStamped> poses;
 		poses.push_back(pose);
-		display_->visualizeInteractiveMarkers(0, poses, std::bind(&DlgAddTaskStage::interactiveMarkerProcessFeedback, this, std::placeholders::_1, std::placeholders::_2));
+		display_->visualizeInteractiveMarkers(0, poses,
+			std::bind(&DlgAddTaskStage::interactiveMarkerProcessFeedback,
+			this, std::placeholders::_1, std::placeholders::_2));
 
 		return vBox;
 	}
@@ -416,7 +443,9 @@ namespace moveit_rviz_plugin
 		fillRowWith(table_joint_.data(), 0);
 		vBox->addWidget(table_joint_.data());
 
-		connect(table_joint_.data(), &QTableWidget::cellChanged, this, [=](int Row, int Column) { std::cout << "cell changed row " << std::to_string(Row) << " col " << std::to_string(Column) << std::endl; });
+		connect(table_joint_.data(), &QTableWidget::cellChanged, this,
+			[=](int Row, int Column)
+			{ std::cout << "cell changed row " << std::to_string(Row) << " col " << std::to_string(Column) << std::endl; });
 
 		return vBox;
 	}
@@ -542,13 +571,17 @@ namespace moveit_rviz_plugin
 
 	void DlgAddTaskStage::onMoveToTcpCurrentClicked()
 	{
-		geometry_msgs::Pose currentPose = queryCurrent();
-		tf::Quaternion quat(currentPose.orientation.x, currentPose.orientation.y, currentPose.orientation.z, currentPose.orientation.w);
+		geometry_msgs::Pose currentPose = fabs(current_goal_.orientation.x + current_goal_.orientation.y +
+			current_goal_.orientation.z + current_goal_.orientation.w) < 1e-5 ? queryCurrent() : current_goal_;
+		tf::Quaternion quat(currentPose.orientation.x, currentPose.orientation.y, currentPose.orientation.z,
+			currentPose.orientation.w);
   		double roll = 0.0, pitch = 0.0, yaw = 0.0;
   		tf::Matrix3x3(quat).getRPY(roll, pitch, yaw);
 
-		std::shared_ptr<QStringList> data = std::make_shared<QStringList>(QStringList({ QString::number(currentPose.position.x), QString::number(currentPose.position.y), QString::number(currentPose.position.z),
-			QString::number(angles::to_degrees(roll)), QString::number(angles::to_degrees(pitch)), QString::number(angles::to_degrees(yaw)) }));
+		std::shared_ptr<QStringList> data = std::make_shared<QStringList>(QStringList({
+			QString::number(currentPose.position.x), QString::number(currentPose.position.y),
+			QString::number(currentPose.position.z), QString::number(angles::to_degrees(roll)),
+			QString::number(angles::to_degrees(pitch)), QString::number(angles::to_degrees(yaw)) }));
 		fillRowWith(table_tcp_.data(), 0, data);
 
 		visualizeWaypoints(table_tcp_.data(), 0);
@@ -586,12 +619,14 @@ namespace moveit_rviz_plugin
 		if (CheckCurrent->isChecked())
 		{
 			geometry_msgs::Pose currentPose = queryCurrent();
-			tf::Quaternion quat(currentPose.orientation.x, currentPose.orientation.y, currentPose.orientation.z, currentPose.orientation.w);
+			tf::Quaternion quat(currentPose.orientation.x, currentPose.orientation.y, currentPose.orientation.z,
+				currentPose.orientation.w);
   			double roll = 0.0, pitch = 0.0, yaw = 0.0;
   			tf::Matrix3x3(quat).getRPY(roll, pitch, yaw);
 
-			data.reset(new QStringList({ QString::number(currentPose.position.x), QString::number(currentPose.position.y), QString::number(currentPose.position.z),
-				QString::number(angles::to_degrees(roll)), QString::number(angles::to_degrees(pitch)), QString::number(angles::to_degrees(yaw)) }));
+			data.reset(new QStringList({ QString::number(currentPose.position.x), QString::number(currentPose.position.y),
+				QString::number(currentPose.position.z), QString::number(angles::to_degrees(roll)),
+				QString::number(angles::to_degrees(pitch)), QString::number(angles::to_degrees(yaw)) }));
 		}
 		
 		fillRowWith(table_waypoints_.data(), table_waypoints_.data()->rowCount() - 1, data);
@@ -609,12 +644,14 @@ namespace moveit_rviz_plugin
 		if (CheckCurrent->isChecked())
 		{
 			geometry_msgs::Pose currentPose = queryCurrent();
-			tf::Quaternion quat(currentPose.orientation.x, currentPose.orientation.y, currentPose.orientation.z, currentPose.orientation.w);
+			tf::Quaternion quat(currentPose.orientation.x, currentPose.orientation.y, currentPose.orientation.z,
+				currentPose.orientation.w);
   			double roll = 0.0, pitch = 0.0, yaw = 0.0;
   			tf::Matrix3x3(quat).getRPY(roll, pitch, yaw);
 
-			data.reset(new QStringList({ QString::number(currentPose.position.x), QString::number(currentPose.position.y), QString::number(currentPose.position.z),
-				QString::number(angles::to_degrees(roll)), QString::number(angles::to_degrees(pitch)), QString::number(angles::to_degrees(yaw)) }));
+			data.reset(new QStringList({ QString::number(currentPose.position.x), QString::number(currentPose.position.y),
+				QString::number(currentPose.position.z), QString::number(angles::to_degrees(roll)),
+				QString::number(angles::to_degrees(pitch)), QString::number(angles::to_degrees(yaw)) }));
 		}
 		
 		fillRowWith(table_waypoints_.data(), table_waypoints_.data()->currentRow() - 1, data);
@@ -625,7 +662,8 @@ namespace moveit_rviz_plugin
 
 	void DlgAddTaskStage::onWaypointsRemoveClicked(QCheckBox* CheckCurrent)
 	{
-		int highlightRow = table_waypoints_.data()->currentRow() == table_waypoints_.data()->rowCount() - 1 ? table_waypoints_.data()->rowCount() - 2 : table_waypoints_.data()->currentRow();
+		int highlightRow = table_waypoints_.data()->currentRow() == table_waypoints_.data()->rowCount() - 1 ?
+			table_waypoints_.data()->rowCount() - 2 : table_waypoints_.data()->currentRow();
 		table_waypoints_.data()->blockSignals(true);
 		table_waypoints_.data()->removeRow(table_waypoints_.data()->currentRow());
 		table_waypoints_.data()->blockSignals(false);
@@ -662,7 +700,8 @@ namespace moveit_rviz_plugin
 		if (link)
 		{
 #ifdef SCENE_MONITOR
-			moveit::core::RobotState state = planning_scene_monitor::LockedPlanningSceneRO(planning_scene_monitor_)->getCurrentState();
+			moveit::core::RobotState state =
+				planning_scene_monitor::LockedPlanningSceneRO(planning_scene_monitor_)->getCurrentState();
 			currentPose = tf2::toMsg(state.getGlobalLinkTransform(link));
 #else
 			const robot_model::RobotModelConstPtr& robotModel = planning_scene_monitor_->getRobotModel();
@@ -676,10 +715,12 @@ namespace moveit_rviz_plugin
 				moveit_msgs::GetPlanningScene::Response res;
 
 				req.components.components =
-					moveit_msgs::PlanningSceneComponents::SCENE_SETTINGS | moveit_msgs::PlanningSceneComponents::ROBOT_STATE |
+					moveit_msgs::PlanningSceneComponents::SCENE_SETTINGS |
+					moveit_msgs::PlanningSceneComponents::ROBOT_STATE |
 					moveit_msgs::PlanningSceneComponents::ROBOT_STATE_ATTACHED_OBJECTS |
 					moveit_msgs::PlanningSceneComponents::WORLD_OBJECT_NAMES |
-					moveit_msgs::PlanningSceneComponents::WORLD_OBJECT_GEOMETRY | moveit_msgs::PlanningSceneComponents::OCTOMAP |
+					moveit_msgs::PlanningSceneComponents::WORLD_OBJECT_GEOMETRY |
+					moveit_msgs::PlanningSceneComponents::OCTOMAP |
 					moveit_msgs::PlanningSceneComponents::TRANSFORMS |
 					moveit_msgs::PlanningSceneComponents::ALLOWED_COLLISION_MATRIX |
 					moveit_msgs::PlanningSceneComponents::LINK_PADDING_AND_SCALING |
@@ -723,7 +764,8 @@ namespace moveit_rviz_plugin
 
 			pose.orientation = tf2::toMsg(orientation);
 #ifdef DEBUG
-			std::cout << "quaternion from euler " << pose.orientation.x << " " << pose.orientation.y << " " << pose.orientation.z << " " << pose.orientation.w << std::endl;
+			std::cout << "quaternion from euler " << pose.orientation.x << " " << pose.orientation.y << " "
+				<< pose.orientation.z << " " << pose.orientation.w << std::endl;
 #endif
 
 			Waypoints.push_back(pose);
@@ -756,7 +798,8 @@ namespace moveit_rviz_plugin
 			poseStamped.pose = it;
 			stamped.push_back(poseStamped);
 		}
-		display_->visualizeInteractiveMarkers(Row, stamped, std::bind(&DlgAddTaskStage::interactiveMarkerProcessFeedback, this, std::placeholders::_1, std::placeholders::_2));
+		display_->visualizeInteractiveMarkers(Row, stamped,
+			std::bind(&DlgAddTaskStage::interactiveMarkerProcessFeedback, this, std::placeholders::_1, std::placeholders::_2));
 	}
 
 	void DlgAddTaskStage::interactiveMarkerProcessFeedback(int Index, visualization_msgs::InteractiveMarkerFeedback& Feedback)
@@ -777,11 +820,13 @@ namespace moveit_rviz_plugin
 
 		if (table)
 		{
-			tf::Quaternion quatFeedback(Feedback.pose.orientation.x, Feedback.pose.orientation.y, Feedback.pose.orientation.z, Feedback.pose.orientation.w);
+			tf::Quaternion quatFeedback(Feedback.pose.orientation.x, Feedback.pose.orientation.y,
+				Feedback.pose.orientation.z, Feedback.pose.orientation.w);
 			double rollFeedback = 0.0, pitchFeedback = 0.0, yawFeedback = 0.0;
 			tf::Matrix3x3(quatFeedback).getRPY(rollFeedback, pitchFeedback, yawFeedback);
 
-			tf::Quaternion quatReference(frame_reference_.orientation.x, frame_reference_.orientation.y, frame_reference_.orientation.z, frame_reference_.orientation.w);
+			tf::Quaternion quatReference(frame_reference_.orientation.x, frame_reference_.orientation.y,
+				frame_reference_.orientation.z, frame_reference_.orientation.w);
 			double rollReference = 0.0, pitchReference = 0.0, yawReference = 0.0;
 			tf::Matrix3x3(quatReference).getRPY(rollReference, pitchReference, yawReference);
 

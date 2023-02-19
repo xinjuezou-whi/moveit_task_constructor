@@ -102,8 +102,11 @@ namespace moveit_rviz_plugin
 		std::shared_ptr<moveit::task_constructor::Task> task_{ nullptr };
 		TaskDisplay* display_{ nullptr };
 		geometry_msgs::Pose frame_reference_;
+		geometry_msgs::Pose current_goal_;
 		enum TargetType { TARGET_TYPE_POSE_GROUP = 0, TARGET_TYPE_TCP };
 		int target_type_{ TARGET_TYPE_POSE_GROUP };
+		std::unique_ptr<ros::NodeHandle> node_handle_{ nullptr };
+		std::unique_ptr<ros::Subscriber> sub_interactive_goal_{ nullptr };
 	};
 }  // namespace moveit_rviz_plugin
 
