@@ -58,7 +58,14 @@ namespace moveit_rviz_plugin
             "/rviz_moveit_motion_planning_display/robot_interaction_interactive_marker_topic/feedback",
 			1, [this](const visualization_msgs::InteractiveMarkerFeedbackConstPtr& Feedback)
 			{
-				current_goal_ = Feedback->pose;
+				if (!current_goal_)
+				{
+					current_goal_ = std::make_unique<geometry_msgs::Pose>(Feedback->pose);
+				}
+				else
+				{
+					*current_goal_ = Feedback->pose;
+				}
             }));
 
 		QString title = Type == TYPE_TASK ? "Add Task with Stage" : "Add Stage to Task";
@@ -571,8 +578,7 @@ namespace moveit_rviz_plugin
 
 	void DlgAddTaskStage::onMoveToTcpCurrentClicked()
 	{
-		geometry_msgs::Pose currentPose = fabs(current_goal_.orientation.x + current_goal_.orientation.y +
-			current_goal_.orientation.z + current_goal_.orientation.w) < 1e-5 ? queryCurrent() : current_goal_;
+		geometry_msgs::Pose currentPose = current_goal_ ? *current_goal_ : queryCurrent();
 		tf::Quaternion quat(currentPose.orientation.x, currentPose.orientation.y, currentPose.orientation.z,
 			currentPose.orientation.w);
   		double roll = 0.0, pitch = 0.0, yaw = 0.0;
