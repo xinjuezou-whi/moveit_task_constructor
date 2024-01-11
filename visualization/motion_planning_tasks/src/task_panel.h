@@ -169,8 +169,8 @@ protected Q_SLOTS:
 	void onOldTaskHandlingChanged();
 
 protected:
-	bool loadTasks(std::string File);
-	void saveTasks(std::string File);
+	bool loadTasks(const std::string& File);
+	void saveTasks(const std::string& File);
 	bool getGoal(const moveit::task_constructor::Stage* Stage, std::string& Goal);
 	bool getGoal(const moveit::task_constructor::Stage* Stage, geometry_msgs::PoseStamped& Goal);
 	bool getOffset(const moveit::task_constructor::Stage* Stage, geometry_msgs::Vector3Stamped& Offset);

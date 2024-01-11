@@ -172,7 +172,7 @@ namespace moveit_rviz_plugin
 		QPushButton* buttonCancel = new QPushButton("Cancel");
 		hBox->addWidget(buttonCancel);
 
-		connect(buttonAdd, &QPushButton::clicked, this, [=]() { add(); done(0); });
+		connect(buttonAdd, &QPushButton::clicked, this, [=]() { add(); done(0); }); // done() is the qt dialog flag
 		connect(buttonCancel, &QPushButton::clicked, this, [=]() { done(1); });
 
 		layoutMain->addLayout(hBox);
@@ -896,6 +896,7 @@ namespace moveit_rviz_plugin
 				std::vector<geometry_msgs::Pose> waypoints;
 				retrieveWaypoints(table_tcp_.data(), waypoints);
 				geometry_msgs::PoseStamped poseTcp;
+				poseTcp.header.frame_id = "world";
 				poseTcp.pose = waypoints.front();
 
 				auto stage = radio_joint_space_->isChecked() ? 

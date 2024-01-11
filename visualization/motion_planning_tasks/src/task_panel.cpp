@@ -364,8 +364,8 @@ TaskView::TaskView(moveit_rviz_plugin::TaskPanel* parent, rviz::Property* root)
 	d_ptr->configureExistingModels();
 
 	// WHI version
-	std::cout << "\nWHI MoveIt Task Constructor GUI demo VERSION 00.09" << std::endl;
-	std::cout << "Copyright © 2022-2024 Wheel Hub Intelligent Co.,Ltd. All rights reserved\n" << std::endl;
+	std::cout << "\nWHI MoveIt Task Constructor GUI demo VERSION 00.10" << std::endl;
+	std::cout << "Copyright © 2022-2025 Wheel Hub Intelligent Co.,Ltd. All rights reserved\n" << std::endl;
 	// WHI logo
 	boost::filesystem::path path(ros::package::getPath("moveit_task_constructor_visualization"));
 	QImage logo;
@@ -694,157 +694,176 @@ void TaskView::onOldTaskHandlingChanged() {
 	Q_EMIT oldTaskHandlingChanged(old_task_handling->getOptionInt());
 }
 
-bool TaskView::loadTasks(std::string File)
+bool TaskView::loadTasks(const std::string& File)
 {
 	try
 	{
-		YAML::Node tasks = YAML::LoadFile(File);
+		YAML::Node node = YAML::LoadFile(File);
 
-		for (const auto& task : tasks)
+		const auto& tasks = node["tasks"];
+		if (tasks)
 		{
-			std::string taskName = task["task"].as<std::string>();
-			auto found = std::find_if(tasks_.begin(), tasks_.end(), [taskName](std::shared_ptr<moveit::task_constructor::Task> Task)
+			for (const auto& task : tasks)
 			{
-				return taskName == Task->name();
-			});
-			if (found == tasks_.end())
-			{
-				auto newTask = std::make_shared<moveit::task_constructor::Task>("whi_gui");
-
-				// create Cartesian interpolation "planner" to be used in various stages
-				auto cartesian_interpolation = std::make_shared<moveit::task_constructor::solvers::CartesianPath>();
-				// create a joint-space interpolation "planner" to be used in various stages
-				auto joint_interpolation = std::make_shared<moveit::task_constructor::solvers::JointInterpolationPlanner>();
-
-				// name and current state
-				newTask->setName(taskName);
-				newTask->add(std::make_unique<moveit::task_constructor::stages::CurrentState>("current"));
-
-				// stages in file
-				const auto& stages = task["stage"];
-				for (const auto& stage : stages)
+				std::string taskName = task["task"].as<std::string>();
+				auto found = std::find_if(tasks_.begin(), tasks_.end(),
+					[taskName](std::shared_ptr<moveit::task_constructor::Task> Task)
+					{
+						return taskName == Task->name();
+					});
+				if (found == tasks_.end())
 				{
-					std::string stageName = stage["name"].as<std::string>();
-					std::string planningGroup = stage["group"].as<std::string>();
-					std::string type = stage["type"].as<std::string>();
-					std::string space = stage["space"].as<std::string>();
-					std::shared_ptr<std::string> targetGroup(nullptr);
-					std::shared_ptr<std::vector<double>> targetPose(nullptr);
-					if (stage["target"].size() == 0)
-					{
-						targetGroup = std::make_shared<std::string>(stage["target"].as<std::string>());	
-					}
-					else
-					{
-						targetPose = std::make_shared<std::vector<double>>();
-						for (const auto& it : stage["target"])
-						{
-							targetPose->push_back(it.as<double>());
-						}
-					}
+					// create Cartesian interpolation "planner" to be used in various stages
+					auto cartesian_interpolation = std::make_shared<moveit::task_constructor::solvers::CartesianPath>();
+					// create a joint-space interpolation "planner" to be used in various stages
+					auto joint_interpolation = std::make_shared<moveit::task_constructor::solvers::JointInterpolationPlanner>();
 
-					double duration = stage["duration"].as<double>();
-					if (type == "move_to")
-					{
-						if (targetGroup)
-						{
-							auto stage = space == "joint" ? 
-								std::make_unique<moveit::task_constructor::stages::MoveTo>(stageName, joint_interpolation) :
-								std::make_unique<moveit::task_constructor::stages::MoveTo>(stageName, cartesian_interpolation);
-							stage->setGroup(planningGroup);
-							stage->setGoal(*targetGroup);
-							stage->properties().set("duration_from_previous", duration);
-							newTask->add(std::move(stage));
-						}
-						else if (targetPose)
-						{
-							geometry_msgs::Pose pose;
-							pose.position.x = targetPose->at(0);
-							pose.position.y = targetPose->at(1);
-							pose.position.z = targetPose->at(2);
-							tf2::Quaternion orientation;
-							orientation.setRPY(angles::from_degrees(targetPose->at(3)),
-								angles::from_degrees(targetPose->at(4)),
-								angles::from_degrees(targetPose->at(5)));
-							pose.orientation = tf2::toMsg(orientation);
+					auto newTask = std::make_shared<moveit::task_constructor::Task>("whi_gui");
+					// name and current state
+					newTask->stages()->setName(taskName);
+					newTask->add(std::make_unique<moveit::task_constructor::stages::CurrentState>("current"));
 
-							geometry_msgs::PoseStamped poseTcp;
-							poseTcp.pose = pose;
-
-							auto stage = space == "joint" ? 
-								std::make_unique<moveit::task_constructor::stages::MoveTo>(stageName, joint_interpolation) :
-								std::make_unique<moveit::task_constructor::stages::MoveTo>(stageName, cartesian_interpolation);
-							stage->setGroup(planningGroup);
-							stage->setGoal(poseTcp);
-							stage->properties().set("duration_from_previous", duration);
-							newTask->add(std::move(stage));
-						}
-					}
-					else if (type == "move_relative")
+					// stages in file
+					const auto& stages = task["stages"];
+					if (stages)
 					{
-						if (space == "cartesian")
+						for (const auto& stage : stages)
 						{
-							auto stage = std::make_unique<moveit::task_constructor::stages::MoveRelative>(stageName, cartesian_interpolation);
-							stage->setGroup(planningGroup);
-							if (fabs(targetPose->at(0) + targetPose->at(1) + targetPose->at(2)) > 1e-5)
+							std::string stageName = stage["stage"].as<std::string>();
+							std::string planningGroup = stage["group"].as<std::string>();
+							std::string type = stage["type"].as<std::string>();
+							std::string space = stage["space"].as<std::string>();
+							std::shared_ptr<std::string> targetGroup(nullptr);
+							std::shared_ptr<std::vector<double>> targetPose(nullptr);
+							try
 							{
-								geometry_msgs::Vector3Stamped direction;
-								direction.header.frame_id = "world";
-								direction.vector.x = targetPose->at(0);
-								direction.vector.y = targetPose->at(1);
-								direction.vector.z = targetPose->at(2);
-								stage->setDirection(direction);
+								targetGroup = std::make_shared<std::string>(stage["target"].as<std::string>());	
 							}
-							else
+							catch (const std::exception& e)
 							{
-								geometry_msgs::TwistStamped twist;
-								twist.header.frame_id = "world";
-								twist.twist.angular.x = angles::from_degrees(targetPose->at(3));
-								twist.twist.angular.y = angles::from_degrees(targetPose->at(4));
-								twist.twist.angular.z = angles::from_degrees(targetPose->at(5));
-								stage->setDirection(twist);
-							}
-							stage->properties().set("duration_from_previous", duration);
-							newTask->add(std::move(stage));
-						}
-						else if (space == "joint")
-						{
-							newTask->loadRobotModel();
-							std::vector<std::string> jointsName = newTask->getRobotModel()->getVariableNames();
-
-							std::map<std::string, double> offsets;
-							for (std::size_t i = 0; i < std::min(jointsName.size(), targetPose->size()); ++i)
-							{
-								offsets.emplace(jointsName[i], angles::from_degrees(targetPose->at(i)));
+								targetPose = std::make_shared<std::vector<double>>();
+								for (const auto& it : stage["target"])
+								{
+									targetPose->push_back(it.as<double>());
+								}
 							}
 
-							auto stage = std::make_unique<moveit::task_constructor::stages::MoveRelative>(stageName, cartesian_interpolation);
-							stage->setGroup(planningGroup);
-							stage->setDirection(offsets);
-							stage->properties().set("duration_from_previous", duration);
-							newTask->add(std::move(stage));
+							double duration = stage["duration"].as<double>();
+							if (type == "move_to")
+							{
+								if (targetGroup)
+								{
+									auto stage = space == "joint" ? 
+										std::make_unique<moveit::task_constructor::stages::MoveTo>(stageName, joint_interpolation) :
+										std::make_unique<moveit::task_constructor::stages::MoveTo>(stageName, cartesian_interpolation);
+									stage->setGroup(planningGroup);
+									stage->setGoal(*targetGroup);
+									stage->properties().set("duration_from_previous", duration);
+									newTask->add(std::move(stage));
+								}
+								else if (targetPose)
+								{
+									geometry_msgs::Pose pose;
+									pose.position.x = targetPose->at(0);
+									pose.position.y = targetPose->at(1);
+									pose.position.z = targetPose->at(2);
+									tf2::Quaternion orientation;
+									orientation.setRPY(angles::from_degrees(targetPose->at(3)),
+										angles::from_degrees(targetPose->at(4)),
+										angles::from_degrees(targetPose->at(5)));
+									pose.orientation = tf2::toMsg(orientation);
+
+									geometry_msgs::PoseStamped poseTcp;
+									poseTcp.header.frame_id = "world";
+									poseTcp.pose = pose;
+
+									auto stage = space == "joint" ? 
+										std::make_unique<moveit::task_constructor::stages::MoveTo>(stageName, joint_interpolation) :
+										std::make_unique<moveit::task_constructor::stages::MoveTo>(stageName, cartesian_interpolation);
+									stage->setGroup(planningGroup);
+									stage->setGoal(poseTcp);
+									stage->properties().set("duration_from_previous", duration);
+									newTask->add(std::move(stage));
+								}
+							}
+							else if (type == "move_relative")
+							{
+								if (space == "cartesian")
+								{
+									if (fabs(targetPose->at(0) + targetPose->at(1) + targetPose->at(2)) > 1e-5)
+									{
+										auto stage = std::make_unique<moveit::task_constructor::stages::MoveRelative>(
+											stageName, cartesian_interpolation);
+										stage->setGroup(planningGroup);
+
+										geometry_msgs::Vector3Stamped direction;
+										direction.header.frame_id = "world";
+										direction.vector.x = targetPose->at(0);
+										direction.vector.y = targetPose->at(1);
+										direction.vector.z = targetPose->at(2);
+										stage->setDirection(direction);
+										stage->properties().set("duration_from_previous", duration);
+										newTask->add(std::move(stage));
+									}
+									if (fabs(targetPose->at(3) + targetPose->at(4) + targetPose->at(5)) > 1e-5)
+									{
+										auto stage = std::make_unique<moveit::task_constructor::stages::MoveRelative>(
+											stageName, cartesian_interpolation);
+										stage->setGroup(planningGroup);
+
+										geometry_msgs::TwistStamped twist;
+										twist.header.frame_id = "world";
+										twist.twist.angular.x = angles::from_degrees(targetPose->at(3));
+										twist.twist.angular.y = angles::from_degrees(targetPose->at(4));
+										twist.twist.angular.z = angles::from_degrees(targetPose->at(5));
+										stage->setDirection(twist);
+										stage->properties().set("duration_from_previous", duration);
+										newTask->add(std::move(stage));
+									}
+								}
+								else if (space == "joint")
+								{
+									newTask->loadRobotModel();
+									std::vector<std::string> jointsName = newTask->getRobotModel()->getVariableNames();
+
+									std::map<std::string, double> offsets;
+									for (std::size_t i = 0; i < std::min(jointsName.size(), targetPose->size()); ++i)
+									{
+										offsets.emplace(jointsName[i], angles::from_degrees(targetPose->at(i)));
+									}
+
+									auto stage = std::make_unique<moveit::task_constructor::stages::MoveRelative>(
+										stageName, cartesian_interpolation);
+									stage->setGroup(planningGroup);
+									stage->setDirection(offsets);
+									stage->properties().set("duration_from_previous", duration);
+									newTask->add(std::move(stage));
+								}
+							}
+						}
+
+						// add to task list
+						tasks_.push_back(newTask);
+
+						if (tasks_.back()->plan())
+						{
+							tasks_.back()->introspection().publishSolution(*tasks_.back()->solutions().back());
 						}
 					}
-				}
-
-				// add to task list
-				tasks_.push_back(newTask);
-
-				if (tasks_.back()->plan())
-				{
-					tasks_.back()->introspection().publishSolution(*tasks_.back()->solutions().back());
 				}
 			}
 		}
+
+		return true;
 	}
-	catch(const std::exception& e)
+	catch (const std::exception& e)
 	{
-		std::cout << "failed to load task file " << File << std::endl;
+		std::cout << "failed to load task file " << File << " with error: " << e.what() << std::endl;
 		return false;
 	}
 }
 
-void TaskView::saveTasks(std::string File)
+void TaskView::saveTasks(const std::string& File)
 {
 	std::string serialized;
 
@@ -949,24 +968,26 @@ std::string TaskView::serializeTask(std::shared_ptr<moveit::task_constructor::Ta
 {
 	std::string serialized;
 
-	std::string line("- task: " + Task->name() + "\n");
+	std::string line("tasks:\n");
 	serialized += line;
-	line.assign("  stage:\n");
+	line.assign("  - task: " + Task->name() + "\n");
+	serialized += line;
+	line.assign("    stages:\n");
 	serialized += line;
 	for (size_t i = 1; i < Task->stages()->numChildren(); ++i)
 	{
 		// name
 		const moveit::task_constructor::Stage* stage = (*Task->stages())[i];
-		line.assign("    - name: " + stage->name() + "\n");
+		line.assign("      - stage: " + stage->name() + "\n");
 		serialized += line;
 		// group
-		line.assign("      group: " + boost::any_cast<std::string>(stage->properties().get("group")) + "\n");
+		line.assign("        group: " + boost::any_cast<std::string>(stage->properties().get("group")) + "\n");
 		serialized += line;
 		// type, space, target, duration
 		std::string space;
 		std::string target;
 		std::string duration;
-		line.assign("      type: ");
+		line.assign("        type: ");
 		if (const moveit::task_constructor::stages::MoveTo* dStage =
 			dynamic_cast<const moveit::task_constructor::stages::MoveTo*>(stage); dStage != nullptr)
 		{
@@ -1062,15 +1083,15 @@ std::string TaskView::serializeTask(std::shared_ptr<moveit::task_constructor::Ta
 		}
 		serialized += line;
 		// space
-		line.assign("      space: " + space);
+		line.assign("        space: " + space);
 		serialized += line;
 		// target
-		line.assign("      target: " + target);
+		line.assign("        target: " + target);
 		serialized += line;
 		// duration
 		if (!duration.empty())
 		{
-			line.assign("      duration: " + duration);
+			line.assign("        duration: " + duration);
 		}
 		serialized += line;
 	}
