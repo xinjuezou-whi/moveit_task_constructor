@@ -330,6 +330,20 @@ namespace moveit_rviz_plugin
 	QLayout* DlgAddTaskStage::initMoveToTcp()
 	{
 		QVBoxLayout* vBox = new QVBoxLayout();
+
+		// fixed frame
+		QHBoxLayout* hBox = new QHBoxLayout();		
+		QLabel* labelFrame = new QLabel("Fixed frame");
+		hBox->addWidget(labelFrame);
+		if (line_fixed_frame_.isNull())
+		{
+			line_fixed_frame_ = new QLineEdit("world");
+		}
+		hBox->addWidget(line_fixed_frame_.data());
+		hBox->addStretch();
+		vBox->addLayout(hBox);
+
+		// tcp pose
 		if (table_tcp_.isNull())
 		{
 			table_tcp_ = new QTableWidget();
@@ -344,7 +358,8 @@ namespace moveit_rviz_plugin
 		fillRowWith(table_tcp_.data(), 0);
 		vBox->addWidget(table_tcp_.data());
 
-		QHBoxLayout* hBox = new QHBoxLayout();
+		// current checkbox
+		hBox = new QHBoxLayout();
 		hBox->addStretch();
 		QPushButton* buttonCurrent = new QPushButton("Current");
 		hBox->addWidget(buttonCurrent);
@@ -366,6 +381,20 @@ namespace moveit_rviz_plugin
 	QLayout* DlgAddTaskStage::initMoveRelativeTcp()
 	{
 		QVBoxLayout* vBox = new QVBoxLayout();
+
+		// fixed frame
+		QHBoxLayout* hBox = new QHBoxLayout();		
+		QLabel* labelFrame = new QLabel("Fixed frame");
+		hBox->addWidget(labelFrame);
+		if (line_fixed_frame_.isNull())
+		{
+			line_fixed_frame_ = new QLineEdit("world");
+		}
+		hBox->addWidget(line_fixed_frame_.data());
+		hBox->addStretch();
+		vBox->addLayout(hBox);
+
+		// tcp pose
 		if (table_tcp_.isNull())
 		{
 			table_tcp_ = new QTableWidget();
@@ -473,7 +502,7 @@ namespace moveit_rviz_plugin
 			delete removing->widget();
 		}
 		else
-		{		
+		{
 			QLayoutItem* child = nullptr;
 			while ((child = removing->layout()->takeAt(0)) != nullptr)
 			{
@@ -481,6 +510,19 @@ namespace moveit_rviz_plugin
 				{
 					child->widget()->setParent(nullptr);
 					delete child->widget();
+				}
+				else if (child->layout())
+				{
+					QLayoutItem* childSub = nullptr;
+					while ((childSub = child->layout()->takeAt(0)) != nullptr)
+					{
+						if (childSub->widget())
+						{
+							childSub->widget()->setParent(nullptr);
+							delete childSub->widget();
+						}
+						delete childSub;
+					}
 				}
 				delete child;
 			}
@@ -896,7 +938,7 @@ namespace moveit_rviz_plugin
 				std::vector<geometry_msgs::Pose> waypoints;
 				retrieveWaypoints(table_tcp_.data(), waypoints);
 				geometry_msgs::PoseStamped poseTcp;
-				poseTcp.header.frame_id = "world";
+				poseTcp.header.frame_id = line_fixed_frame_.data()->text().toStdString();
 				poseTcp.pose = waypoints.front();
 
 				auto stage = radio_joint_space_->isChecked() ? 
@@ -928,7 +970,7 @@ namespace moveit_rviz_plugin
 					auto stage = std::make_unique<moveit::task_constructor::stages::MoveRelative>(descriptionVector, cartesian_interpolation);
 					stage->setGroup(joint_model_group_name_);
 					geometry_msgs::Vector3Stamped direction;
-					direction.header.frame_id = "world";
+					direction.header.frame_id = line_fixed_frame_.data()->text().toStdString();
 					direction.vector.x = rawPoints.front()[0];
 					direction.vector.y = rawPoints.front()[1];
 					direction.vector.z = rawPoints.front()[2];
@@ -950,7 +992,7 @@ namespace moveit_rviz_plugin
 					auto stage = std::make_unique<moveit::task_constructor::stages::MoveRelative>(descriptionTwist, cartesian_interpolation);
 					stage->setGroup(joint_model_group_name_);
 					geometry_msgs::TwistStamped twist;
-					twist.header.frame_id = "world";
+					twist.header.frame_id = line_fixed_frame_.data()->text().toStdString();
 					twist.twist.angular.x = angles::from_degrees(rawPoints.front()[3]);
 					twist.twist.angular.y = angles::from_degrees(rawPoints.front()[4]);
 					twist.twist.angular.z = angles::from_degrees(rawPoints.front()[5]);

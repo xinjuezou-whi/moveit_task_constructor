@@ -96,6 +96,7 @@ namespace moveit_rviz_plugin
 		QPointer<QTableWidget> table_tcp_;
 		QPointer<QTableWidget> table_joint_;
 		QPointer<QTableWidget> table_waypoints_;
+		QPointer<QLineEdit> line_fixed_frame_;
 		std::string joint_model_group_name_;
 		planning_scene_monitor::PlanningSceneMonitorPtr planning_scene_monitor_{ nullptr };
 		const moveit::core::JointModelGroup* joint_model_group_{ nullptr };

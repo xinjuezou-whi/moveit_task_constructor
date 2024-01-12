@@ -364,7 +364,7 @@ TaskView::TaskView(moveit_rviz_plugin::TaskPanel* parent, rviz::Property* root)
 	d_ptr->configureExistingModels();
 
 	// WHI version
-	std::cout << "\nWHI MoveIt Task Constructor GUI demo VERSION 00.10" << std::endl;
+	std::cout << "\nWHI MoveIt Task Constructor GUI demo VERSION 00.11" << std::endl;
 	std::cout << "Copyright © 2022-2025 Wheel Hub Intelligent Co.,Ltd. All rights reserved\n" << std::endl;
 	// WHI logo
 	boost::filesystem::path path(ros::package::getPath("moveit_task_constructor_visualization"));
@@ -748,7 +748,11 @@ bool TaskView::loadTasks(const std::string& File)
 								}
 							}
 
+							const auto& frame = stage["fixed_frame"];
+							std::string fixedFrame = frame ? frame.as<std::string>() : "world";
+
 							double duration = stage["duration"].as<double>();
+
 							if (type == "move_to")
 							{
 								if (targetGroup)
@@ -774,7 +778,7 @@ bool TaskView::loadTasks(const std::string& File)
 									pose.orientation = tf2::toMsg(orientation);
 
 									geometry_msgs::PoseStamped poseTcp;
-									poseTcp.header.frame_id = "world";
+									poseTcp.header.frame_id = fixedFrame;
 									poseTcp.pose = pose;
 
 									auto stage = space == "joint" ? 
@@ -797,7 +801,7 @@ bool TaskView::loadTasks(const std::string& File)
 										stage->setGroup(planningGroup);
 
 										geometry_msgs::Vector3Stamped direction;
-										direction.header.frame_id = "world";
+										direction.header.frame_id = fixedFrame;
 										direction.vector.x = targetPose->at(0);
 										direction.vector.y = targetPose->at(1);
 										direction.vector.z = targetPose->at(2);
@@ -812,7 +816,7 @@ bool TaskView::loadTasks(const std::string& File)
 										stage->setGroup(planningGroup);
 
 										geometry_msgs::TwistStamped twist;
-										twist.header.frame_id = "world";
+										twist.header.frame_id = fixedFrame;
 										twist.twist.angular.x = angles::from_degrees(targetPose->at(3));
 										twist.twist.angular.y = angles::from_degrees(targetPose->at(4));
 										twist.twist.angular.z = angles::from_degrees(targetPose->at(5));
@@ -986,6 +990,7 @@ std::string TaskView::serializeTask(std::shared_ptr<moveit::task_constructor::Ta
 		// type, space, target, duration
 		std::string space;
 		std::string target;
+		std::string frame;
 		std::string duration;
 		line.assign("        type: ");
 		if (const moveit::task_constructor::stages::MoveTo* dStage =
@@ -1030,6 +1035,9 @@ std::string TaskView::serializeTask(std::shared_ptr<moveit::task_constructor::Ta
 					std::to_string(angles::to_degrees(roll)) + ", " +
 					std::to_string(angles::to_degrees(pitch)) + ", " +
 					std::to_string(angles::to_degrees(yaw)) + "]\n");
+
+				// fixed frame
+				frame = goalPose.header.frame_id + "\n";
 			}
 
 			// duration from previous
@@ -1054,12 +1062,18 @@ std::string TaskView::serializeTask(std::shared_ptr<moveit::task_constructor::Ta
 				target.assign("[" + std::to_string(offsetPose.vector.x) + ", " +
 					std::to_string(offsetPose.vector.y) + ", " +
 					std::to_string(offsetPose.vector.z) + ", 0.0, 0.0, 0.0]\n");
+
+				// fixed frame
+				frame = offsetPose.header.frame_id + "\n";
 			}
 			else if (getOffset(dStage, offsetTwist))
 			{
 				target.assign("[0.0, 0.0, 0.0, " + std::to_string(offsetTwist.twist.angular.x) + ", " +
 					std::to_string(offsetTwist.twist.angular.y) + ", " +
 					std::to_string(offsetTwist.twist.angular.z) + "]\n");
+
+				// fixed frame
+				frame = offsetTwist.header.frame_id + "\n";
 			}
 			else if (getOffset(dStage, offsetJoints))
 			{
@@ -1088,6 +1102,12 @@ std::string TaskView::serializeTask(std::shared_ptr<moveit::task_constructor::Ta
 		// target
 		line.assign("        target: " + target);
 		serialized += line;
+		// fixed frame
+		if (!frame.empty())
+		{
+			line.assign("        fixed_frame: " + frame);
+			serialized += line;
+		}
 		// duration
 		if (!duration.empty())
 		{

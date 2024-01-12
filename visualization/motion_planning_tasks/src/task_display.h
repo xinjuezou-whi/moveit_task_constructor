@@ -100,7 +100,8 @@ public:
 	// waypoint
 	using InteractiveMarkerProcessFeedback = std::function<void(int Index, visualization_msgs::InteractiveMarkerFeedback&)>;
 	void clearInteractiveMarkers();
-	void visualizeInteractiveMarkers(int Index, const std::vector<geometry_msgs::PoseStamped>& Poses, const InteractiveMarkerProcessFeedback& FeedbackFunc);
+	void visualizeInteractiveMarkers(int Index, const std::vector<geometry_msgs::PoseStamped>& Poses,
+		const InteractiveMarkerProcessFeedback& FeedbackFunc);
 
 protected:
 	void onInitialize() override;
