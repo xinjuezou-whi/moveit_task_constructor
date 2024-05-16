@@ -85,12 +85,12 @@ void ExecuteTaskSolutionCapability::initialize() {
 	// configure the action server
 	as_.reset(new actionlib::SimpleActionServer<moveit_task_constructor_msgs::ExecuteTaskSolutionAction>(
 	    root_node_handle_, "execute_task_solution",
-	    std::bind(&ExecuteTaskSolutionCapability::goalCallback, this, std::placeholders::_1), false));
+	    std::bind(&ExecuteTaskSolutionCapability::execCallback, this, std::placeholders::_1), false));
 	as_->registerPreemptCallback(std::bind(&ExecuteTaskSolutionCapability::preemptCallback, this));
 	as_->start();
 }
 
-void ExecuteTaskSolutionCapability::goalCallback(
+void ExecuteTaskSolutionCapability::execCallback(
     const moveit_task_constructor_msgs::ExecuteTaskSolutionGoalConstPtr& goal) {
 	moveit_task_constructor_msgs::ExecuteTaskSolutionResult result;
 
@@ -167,13 +167,18 @@ bool ExecuteTaskSolutionCapability::constructMotionPlan(const moveit_task_constr
 		}
 		exec_traj.trajectory_ = std::make_shared<robot_trajectory::RobotTrajectory>(model, group);
 		exec_traj.trajectory_->setRobotTrajectoryMsg(state, sub_traj.trajectory);
+		exec_traj.controller_names_ = sub_traj.execution_info.controller_names;
 
 		/* TODO add action feedback and markers */
-		exec_traj.effect_on_success_ = [this, sub_traj,
+		exec_traj.effect_on_success_ = [this,
+		                                &scene_diff = const_cast<::moveit_msgs::PlanningScene&>(sub_traj.scene_diff),
 		                                description](const plan_execution::ExecutableMotionPlan* /*plan*/) {
-			if (!moveit::core::isEmpty(sub_traj.scene_diff)) {
+			scene_diff.robot_state.joint_state = sensor_msgs::JointState();
+			scene_diff.robot_state.multi_dof_joint_state = sensor_msgs::MultiDOFJointState();
+
+			if (!moveit::core::isEmpty(scene_diff)) {
 				ROS_DEBUG_STREAM_NAMED("ExecuteTaskSolution", "apply effect of " << description);
-				return context_->planning_scene_monitor_->newPlanningSceneMessage(sub_traj.scene_diff);
+				return context_->planning_scene_monitor_->newPlanningSceneMessage(scene_diff);
 			}
 			return true;
 		};
